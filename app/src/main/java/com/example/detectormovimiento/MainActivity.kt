@@ -1,6 +1,7 @@
 package com.example.detectormovimiento
 
 import android.app.Activity
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -11,11 +12,15 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import com.example.detectormovimiento.AnalizadorVital.EstadoMedicion
+import com.example.detectormovimiento.DetectorSismico.Fase
+import com.example.detectormovimiento.DetectorSismico.Nivel
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -39,6 +44,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var tvAceleracionPico: TextView
     private lateinit var tvQuake30sTimer: TextView
     private lateinit var tvMercalliDetalle: TextView
+    private lateinit var btnRestablecer: Button
     private lateinit var sismografoView: SismografoView
 
     // Biometric UI Views
@@ -51,24 +57,36 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var tvBpmValues: TextView
 
     private var toneGenerator: ToneGenerator? = null
-    private var lastToneTime = 0L
+    private val handler = Handler(Looper.getMainLooper())
 
-    // Seismic Low-Pass Filter (alpha = 0.15f)
-    private var filteredPga = 0f
-    private val alphaPga = 0.15f
-    private var currentPgaColor = "#00E676"
+    // Sismología
+    private val detector = DetectorSismico()
+    private var ultimaFase: Fase? = null
+    private var ultimoNivel = Nivel.NINGUNO
+    private var ultimaActualizacionUi = 0L
+    private var alarmaSonando = false
 
-    // 10-Second Continuous Sustained Motion Evaluation
-    private var quakeStartTimestamp = 0L
-    private var is10sAlertTriggered = false
-    private val pgaHistory10s = mutableListOf<PgaSample>()
-
-    // Biometric measurement variables (15-second session)
+    // Biometría (20 s, acelerómetro a 200 Hz mientras se mide)
     private var isBiometricMeasuring = false
     private var biometricStartTime = 0L
-    private val zRawSamples = mutableListOf<Float>()
-    private val handler = Handler(Looper.getMainLooper())
+    private val tiemposNs = ArrayList<Long>()
+    private val muestrasX = ArrayList<Float>()
+    private val muestrasY = ArrayList<Float>()
+    private val muestrasZ = ArrayList<Float>()
     private var biometricProgressRunnable: Runnable? = null
+
+    private val alarmaRunnable = object : Runnable {
+        override fun run() {
+            if (!alarmaSonando) return
+            playSeismicTone(ultimoNivel)
+            // LEVE: un solo aviso. MODERADO y FUERTE: la sirena se repite hasta restablecer.
+            if (ultimoNivel == Nivel.MODERADO || ultimoNivel == Nivel.FUERTE) {
+                handler.postDelayed(this, if (ultimoNivel == Nivel.FUERTE) 700L else 1500L)
+            } else {
+                alarmaSonando = false
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,6 +104,7 @@ class MainActivity : Activity(), SensorEventListener {
         tvAceleracionPico = findViewById(R.id.tvAceleracionPico)
         tvQuake30sTimer = findViewById(R.id.tvQuake30sTimer)
         tvMercalliDetalle = findViewById(R.id.tvMercalliDetalle)
+        btnRestablecer = findViewById(R.id.btnRestablecer)
         sismografoView = findViewById(R.id.sismografoView)
 
         // Initialize Biometric Views
@@ -100,9 +119,7 @@ class MainActivity : Activity(), SensorEventListener {
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
 
         linearAccelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
-        if (linearAccelSensor != null) {
-            isLinearAvailable = true
-        }
+        isLinearAvailable = linearAccelSensor != null
         accelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
         toneGenerator = try {
@@ -111,23 +128,31 @@ class MainActivity : Activity(), SensorEventListener {
             null
         }
 
+        if (accelSensor == null && linearAccelSensor == null) {
+            tvStatusBadge.text = "⚠️ ESTE TELÉFONO NO TIENE ACELERÓMETRO"
+            tvStatusBadge.setTextColor(Color.parseColor("#FF5252"))
+            btnStartBiometric.isEnabled = false
+        }
+
         // Tab click listeners
         btnTabSeismic.setOnClickListener {
             layoutSeismicSection.visibility = View.VISIBLE
             layoutBiometricSection.visibility = View.GONE
-            btnTabSeismic.setBackgroundColor(Color.parseColor("#2563EB"))
-            btnTabSeismic.setTextColor(Color.WHITE)
-            btnTabBiometric.setBackgroundColor(Color.parseColor("#334155"))
-            btnTabBiometric.setTextColor(Color.parseColor("#94A3B8"))
+            pintarTab(btnTabSeismic, "#2563EB", true)
+            pintarTab(btnTabBiometric, "#334155", false)
         }
 
         btnTabBiometric.setOnClickListener {
             layoutSeismicSection.visibility = View.GONE
             layoutBiometricSection.visibility = View.VISIBLE
-            btnTabBiometric.setBackgroundColor(Color.parseColor("#0284C7"))
-            btnTabBiometric.setTextColor(Color.WHITE)
-            btnTabSeismic.setBackgroundColor(Color.parseColor("#334155"))
-            btnTabSeismic.setTextColor(Color.parseColor("#94A3B8"))
+            pintarTab(btnTabBiometric, "#0284C7", true)
+            pintarTab(btnTabSeismic, "#334155", false)
+        }
+
+        btnRestablecer.setOnClickListener {
+            detenerAlarma()
+            detector.restablecer()
+            ultimaFase = null
         }
 
         // Biometric Manual Start Button
@@ -136,31 +161,177 @@ class MainActivity : Activity(), SensorEventListener {
         }
     }
 
+    private fun pintarTab(boton: Button, colorFondo: String, activo: Boolean) {
+        boton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(colorFondo))
+        boton.setTextColor(if (activo) Color.WHITE else Color.parseColor("#94A3B8"))
+    }
+
+    // ===================== SISMOLOGÍA =====================
+
+    private fun processSeismicSensor(event: SensorEvent) {
+        val x = event.values[0]
+        val y = event.values[1]
+        val z = event.values[2]
+        val total = sqrt(x * x + y * y + z * z)
+        // Sin sensor de aceleración lineal, se resta la gravedad a la magnitud.
+        val magnitud = if (isLinearAvailable) total else abs(total - SensorManager.GRAVITY_EARTH)
+
+        val ahora = SystemClock.elapsedRealtime()
+        val estado = detector.procesar(magnitud, ahora)
+
+        sismografoView.agregarPunto(estado.pga)
+
+        if (estado.alertaNueva) {
+            ultimoNivel = estado.nivel
+            iniciarAlarma()
+        }
+
+        // La interfaz se actualiza 10 veces por segundo (o al cambiar de fase) para no
+        // trabar los teléfonos viejos; el sensor llega a unas 50 muestras por segundo.
+        if (estado.fase == ultimaFase && !estado.alertaNueva && ahora - ultimaActualizacionUi < 100L) return
+        ultimaActualizacionUi = ahora
+        if (estado.fase != ultimaFase && estado.fase != Fase.ALERTA) detenerAlarma()
+        ultimaFase = estado.fase
+        mostrarEstadoSismico(estado)
+    }
+
+    private fun mostrarEstadoSismico(estado: DetectorSismico.Estado) {
+        val color: String
+        when (estado.fase) {
+            Fase.CALIBRANDO -> {
+                color = "#38BDF8"
+                tvStatusBadge.text = "◌ CALIBRANDO SENSOR..."
+                tvNivelMovimiento.text = "Deja el teléfono quieto unos segundos"
+                tvQuake30sTimer.text = "Midiendo el ruido propio del sensor de este teléfono."
+                tvMercalliDetalle.text = "Intensidad: I - Imperceptible. Sistema iniciando."
+                btnRestablecer.visibility = View.GONE
+            }
+
+            Fase.NORMAL -> {
+                color = "#00E676"
+                tvStatusBadge.text = "● SISTEMA NORMAL"
+                tvNivelMovimiento.text = "Sin Actividad Sísmica Sostenida"
+                tvQuake30sTimer.text = String.format(
+                    Locale.getDefault(),
+                    "⏳ Vigilando. Umbral de este teléfono: %.2f m/s²", estado.umbral
+                )
+                tvMercalliDetalle.text = "Intensidad: I - Imperceptible. Sistema monitoreando."
+                btnRestablecer.visibility = View.GONE
+            }
+
+            Fase.EVALUANDO -> {
+                color = "#FFA726"
+                val segundos = estado.segundosEvaluados.coerceAtMost(10)
+                tvStatusBadge.text = String.format(
+                    Locale.getDefault(), "⏳ EVALUANDO MOVIMIENTO SOSTENIDO (%ds / 10s)", segundos
+                )
+                tvNivelMovimiento.text = "Movimiento en verificación..."
+                tvQuake30sTimer.text = String.format(
+                    Locale.getDefault(),
+                    "⏳ Verificando si el movimiento persiste por 10s: %ds transcurridos", segundos
+                )
+                btnRestablecer.visibility = View.GONE
+            }
+
+            Fase.ALERTA -> {
+                val textos = when (estado.nivel) {
+                    Nivel.FUERTE -> Triple(
+                        "🚨 ALERTA MÁXIMA: SISMO FUERTE DETECTADO",
+                        "Sacudida Intensa Sostenida",
+                        "Intensidad: VI+ - Fuerte / Destructivo. Agáchate, cúbrete y sujétate. Al terminar, evacua."
+                    )
+                    Nivel.MODERADO -> Triple(
+                        "▲ SISMO MODERADO DETECTADO",
+                        "Movimiento Moderado Sostenido",
+                        "Intensidad: IV - V - Moderado. Agáchate, cúbrete y sujétate."
+                    )
+                    else -> Triple(
+                        "▲ SISMO LEVE DETECTADO",
+                        "Movimiento Leve Sostenido",
+                        "Intensidad: II - III - Leve. Mantén la calma y aléjate de ventanas."
+                    )
+                }
+                color = when (estado.nivel) {
+                    Nivel.FUERTE -> "#FF5252"
+                    Nivel.MODERADO -> "#FFA726"
+                    else -> "#29B6F6"
+                }
+                tvStatusBadge.text = textos.first
+                tvNivelMovimiento.text = textos.second
+                tvMercalliDetalle.text = textos.third
+                tvQuake30sTimer.text = String.format(
+                    Locale.getDefault(),
+                    "✅ Sismo verificado (%ds de movimiento). Pico: %.2f m/s²",
+                    estado.segundosEvaluados, estado.pgaPico
+                )
+                btnRestablecer.visibility = View.VISIBLE
+            }
+        }
+
+        val c = Color.parseColor(color)
+        sismografoView.setStrokeColor(color)
+        tvStatusBadge.setTextColor(c)
+        tvAceleracionPico.setTextColor(c)
+        tvAceleracionPico.text = String.format(Locale.getDefault(), "PGA Inmediato: %.2f m/s²", estado.pga)
+    }
+
+    private fun iniciarAlarma() {
+        handler.removeCallbacks(alarmaRunnable)
+        alarmaSonando = true
+        handler.post(alarmaRunnable)
+    }
+
+    private fun detenerAlarma() {
+        alarmaSonando = false
+        handler.removeCallbacks(alarmaRunnable)
+        toneGenerator?.stopTone()
+    }
+
+    private fun playSeismicTone(nivel: Nivel) {
+        try {
+            when (nivel) {
+                Nivel.LEVE -> toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
+                Nivel.MODERADO -> toneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 600)
+                Nivel.FUERTE -> toneGenerator?.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 650)
+                Nivel.NINGUNO -> Unit
+            }
+        } catch (_: Exception) {
+            // Ignorar: sin audio la alerta sigue visible en pantalla
+        }
+    }
+
+    // ===================== SIGNOS VITALES =====================
+
     private fun startManualBiometricMeasurement() {
         if (isBiometricMeasuring) return
+        val sensor = accelSensor ?: return
 
         isBiometricMeasuring = true
-        biometricStartTime = System.currentTimeMillis()
-        zRawSamples.clear()
+        biometricStartTime = SystemClock.elapsedRealtime()
+        tiemposNs.clear()
+        muestrasX.clear()
+        muestrasY.clear()
+        muestrasZ.clear()
+
+        // Más muestras por segundo para poder ver la vibración de cada latido.
+        sensorManager.unregisterListener(this, sensor)
+        sensorManager.registerListener(this, sensor, PERIODO_BIOMETRIA_US)
 
         btnStartBiometric.isEnabled = false
         pbBiometricProgress.visibility = View.VISIBLE
         pbBiometricProgress.progress = 0
-        tvBiometricStatus.text = "⏳ Midiendo... Mantén el teléfono quieto sobre tu pecho (15s)"
+        tvBiometricStatus.text = "⏳ Midiendo... Quédate quieto con el teléfono sobre el pecho (20s)"
         tvBiometricStatus.setTextColor(Color.parseColor("#F8FAFC"))
-        tvRpmValues.text = "0 RPM"
-        tvRpmEstado.text = "Midiendo..."
-        tvBpmValues.text = "0 BPM"
-        tvBpmEstado.text = "Midiendo..."
+        mostrarValor(tvRpmValues, tvRpmEstado, "-- RPM", "Midiendo...", "#38BDF8")
+        mostrarValor(tvBpmValues, tvBpmEstado, "-- BPM", "Midiendo...", "#F43F5E")
 
         biometricProgressRunnable = object : Runnable {
             override fun run() {
                 if (!isBiometricMeasuring) return
-                val elapsed = System.currentTimeMillis() - biometricStartTime
-                val progress = ((elapsed * 100) / 15000L).toInt().coerceIn(0, 100)
-                pbBiometricProgress.progress = progress
+                val elapsed = SystemClock.elapsedRealtime() - biometricStartTime
+                pbBiometricProgress.progress = ((elapsed * 100) / DURACION_BIOMETRIA_MS).toInt().coerceIn(0, 100)
 
-                if (elapsed >= 15000L) {
+                if (elapsed >= DURACION_BIOMETRIA_MS) {
                     finishBiometricMeasurement()
                 } else {
                     handler.postDelayed(this, 100)
@@ -170,140 +341,107 @@ class MainActivity : Activity(), SensorEventListener {
         handler.post(biometricProgressRunnable!!)
     }
 
-    private fun finishBiometricMeasurement() {
+    private fun detenerCapturaBiometrica() {
         isBiometricMeasuring = false
-        btnStartBiometric.isEnabled = true
+        biometricProgressRunnable?.let { handler.removeCallbacks(it) }
         pbBiometricProgress.visibility = View.GONE
-
-        if (zRawSamples.size < 50) {
-            tvBiometricStatus.text = "⚠️ Muestra insuficiente. Intenta de nuevo."
-            tvBiometricStatus.setTextColor(Color.parseColor("#FF5252"))
-            tvRpmValues.text = "0 RPM"
-            tvBpmValues.text = "0 BPM"
-            return
+        btnStartBiometric.isEnabled = true
+        // Volver a la frecuencia normal para ahorrar batería.
+        accelSensor?.let {
+            sensorManager.unregisterListener(this, it)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
-
-        // 1. Compute Mean Z to remove DC offset / gravity constant
-        val meanZ = zRawSamples.average().toFloat()
-
-        // 2. Compute AC Variance / Standard Deviation of Z
-        var varianceSum = 0.0
-        val acZList = mutableListOf<Float>()
-        for (raw in zRawSamples) {
-            val ac = raw - meanZ
-            acZList.add(ac)
-            varianceSum += (ac * ac)
-        }
-        val stdDev = sqrt(varianceSum / zRawSamples.size).toFloat()
-
-        // 3. Low-Pass Filter AC signal for chest expansion (alpha = 0.08f)
-        val filteredAcZ = mutableListOf<Float>()
-        var fz = acZList[0]
-        for (ac in acZList) {
-            fz = 0.08f * ac + 0.92f * fz
-            filteredAcZ.add(fz)
-        }
-
-        val maxAc = filteredAcZ.maxOrNull() ?: 0f
-        val minAc = filteredAcZ.minOrNull() ?: 0f
-        val chestP2P = maxAc - minAc
-
-        // RIGID TABLE / SOLID OBJECT CHECK:
-        // On a solid table, stdDev is < 0.025 m/s² and chest peak-to-peak amplitude < 0.035 m/s²
-        if (stdDev < 0.025f || chestP2P < 0.035f) {
-            tvBiometricStatus.text = "⚠️ Dispositivo sobre objeto sólido / mesa. No se detectó movimiento de pecho (0 RPM / 0 BPM)."
-            tvBiometricStatus.setTextColor(Color.parseColor("#FF5252"))
-
-            tvRpmEstado.text = "Objeto sólido (Sin movimiento)"
-            tvRpmEstado.setTextColor(Color.parseColor("#FF5252"))
-            tvRpmValues.text = "0 RPM"
-            tvRpmValues.setTextColor(Color.parseColor("#FF5252"))
-
-            tvBpmEstado.text = "Objeto sólido (Sin pulso)"
-            tvBpmEstado.setTextColor(Color.parseColor("#FF5252"))
-            tvBpmValues.text = "0 BPM"
-            tvBpmValues.setTextColor(Color.parseColor("#FF5252"))
-            return
-        }
-
-        // Process chest inhalation peaks and heart micro-pulses
-        var breathPeaks = 0
-        var pulsePeaks = 0
-        var prevVal = filteredAcZ[0]
-        var prevTrend = 0
-
-        for (i in 1 until filteredAcZ.size) {
-            val curr = filteredAcZ[i]
-            val diff = curr - prevVal
-            val trend = if (diff > 0.0020f) 1 else if (diff < -0.0020f) -1 else 0
-
-            if (prevTrend == 1 && trend == -1) {
-                if (curr > 0.015f) {
-                    breathPeaks++
-                }
-                if (curr in 0.003f..0.014f) {
-                    pulsePeaks++
-                }
-            }
-            prevVal = curr
-            prevTrend = trend
-        }
-
-        // IF NO VALID CHEST PEAKS DETECTED -> RESULT IS 0
-        if (breathPeaks < 2) {
-            tvBiometricStatus.text = "⚠️ Objeto sólido / Movimiento de pecho no detectado."
-            tvBiometricStatus.setTextColor(Color.parseColor("#FF5252"))
-
-            tvRpmEstado.text = "Sin movimiento"
-            tvRpmEstado.setTextColor(Color.parseColor("#FF5252"))
-            tvRpmValues.text = "0 RPM"
-            tvRpmValues.setTextColor(Color.parseColor("#FF5252"))
-
-            tvBpmEstado.text = "Sin pulso"
-            tvBpmEstado.setTextColor(Color.parseColor("#FF5252"))
-            tvBpmValues.text = "0 BPM"
-            tvBpmValues.setTextColor(Color.parseColor("#FF5252"))
-            return
-        }
-
-        // Calculate RPM and BPM for 15s session
-        val rpm = (breathPeaks * 4).coerceIn(8, 32)
-        val bpm = if (pulsePeaks > 0) ((pulsePeaks * 4) + 56).coerceIn(58, 120) else 0
-
-        // Respiration Status
-        val (rpmStatus, rpmColor) = when {
-            rpm == 0 -> Pair("Sin movimiento", "#FF5252")
-            rpm < 10 -> Pair("Bradipnea (Lenta)", "#38BDF8")
-            rpm in 10..20 -> Pair("Eupnea (Normal)", "#00E676")
-            else -> Pair("Taquipnea (Acelerada)", "#FF5252")
-        }
-        tvRpmValues.text = String.format(Locale.getDefault(), "%d RPM", rpm)
-        tvRpmEstado.text = rpmStatus
-        tvRpmEstado.setTextColor(Color.parseColor(rpmColor))
-        tvRpmValues.setTextColor(Color.parseColor(rpmColor))
-
-        // Heart Rate Status
-        val (bpmStatus, bpmColor) = when {
-            bpm == 0 -> Pair("Sin pulso detectado", "#FF5252")
-            bpm < 60 -> Pair("Bradicardia (Lento)", "#38BDF8")
-            bpm in 60..100 -> Pair("Pulso Normal", "#00E676")
-            else -> Pair("Taquicardia (Acelerado)", "#FF5252")
-        }
-        tvBpmValues.text = String.format(Locale.getDefault(), "%d BPM", bpm)
-        tvBpmEstado.text = bpmStatus
-        tvBpmEstado.setTextColor(Color.parseColor(bpmColor))
-        tvBpmValues.setTextColor(Color.parseColor(bpmColor))
-
-        tvBiometricStatus.text = "✅ Medición sobre el pecho completada con éxito."
-        tvBiometricStatus.setTextColor(Color.parseColor("#00E676"))
     }
+
+    private fun finishBiometricMeasurement() {
+        detenerCapturaBiometrica()
+
+        val resultado = AnalizadorVital.analizar(
+            tiemposNs.toLongArray(),
+            muestrasX.toFloatArray(),
+            muestrasY.toFloatArray(),
+            muestrasZ.toFloatArray(),
+        )
+
+        val rojo = "#FF5252"
+        when (resultado.estado) {
+            EstadoMedicion.MUESTRA_INSUFICIENTE -> {
+                tvBiometricStatus.text = "⚠️ Muestra insuficiente. Intenta de nuevo."
+                tvBiometricStatus.setTextColor(Color.parseColor(rojo))
+                mostrarValor(tvRpmValues, tvRpmEstado, "-- RPM", "Sin medición", rojo)
+                mostrarValor(tvBpmValues, tvBpmEstado, "-- BPM", "Sin medición", rojo)
+                return
+            }
+
+            EstadoMedicion.SIN_MOVIMIENTO -> {
+                tvBiometricStatus.text = "⚠️ No se detectó movimiento de pecho. ¿Está el teléfono sobre una mesa u objeto sólido?"
+                tvBiometricStatus.setTextColor(Color.parseColor(rojo))
+                mostrarValor(tvRpmValues, tvRpmEstado, "0 RPM", "Sin movimiento", rojo)
+                mostrarValor(tvBpmValues, tvBpmEstado, "-- BPM", "Sin señal", rojo)
+                return
+            }
+
+            EstadoMedicion.MUCHO_MOVIMIENTO -> {
+                tvBiometricStatus.text = "⚠️ Hubo demasiado movimiento. Recuéstate quieto y repite la medición."
+                tvBiometricStatus.setTextColor(Color.parseColor(rojo))
+                mostrarValor(tvRpmValues, tvRpmEstado, "-- RPM", "Repetir", rojo)
+                mostrarValor(tvBpmValues, tvBpmEstado, "-- BPM", "Repetir", rojo)
+                return
+            }
+
+            EstadoMedicion.RESPIRACION_IRREGULAR, EstadoMedicion.OK -> Unit
+        }
+
+        // Frecuencia respiratoria
+        val rpm = resultado.rpm
+        if (rpm == null) {
+            mostrarValor(tvRpmValues, tvRpmEstado, "-- RPM", "Irregular, no se pudo medir", "#FFA726")
+        } else {
+            val (rpmStatus, rpmColor) = when {
+                rpm < 12 -> Pair("Bradipnea (Lenta)", "#38BDF8")
+                rpm <= 20 -> Pair("Eupnea (Normal)", "#00E676")
+                else -> Pair("Taquipnea (Acelerada)", rojo)
+            }
+            mostrarValor(tvRpmValues, tvRpmEstado, String.format(Locale.getDefault(), "%d RPM", rpm), rpmStatus, rpmColor)
+        }
+
+        // Ritmo cardíaco
+        val bpm = resultado.bpm
+        if (bpm == null) {
+            val motivo = if (resultado.frecuenciaMuestreoHz < 40.0) "Sensor muy lento en este teléfono" else "Señal débil, tómalo en la muñeca"
+            mostrarValor(tvBpmValues, tvBpmEstado, "-- BPM", motivo, "#FFA726")
+        } else {
+            val (bpmStatus, bpmColor) = when {
+                bpm < 60 -> Pair("Bradicardia (Lento)", "#38BDF8")
+                bpm <= 100 -> Pair("Pulso Normal", "#00E676")
+                else -> Pair("Taquicardia (Acelerado)", rojo)
+            }
+            mostrarValor(tvBpmValues, tvBpmEstado, String.format(Locale.getDefault(), "%d BPM", bpm), bpmStatus, bpmColor)
+        }
+
+        if (rpm != null && bpm != null) {
+            tvBiometricStatus.text = "✅ Medición completada. Valores orientativos."
+            tvBiometricStatus.setTextColor(Color.parseColor("#00E676"))
+        } else {
+            tvBiometricStatus.text = "⚠️ Medición parcial: algún valor no fue confiable."
+            tvBiometricStatus.setTextColor(Color.parseColor("#FFA726"))
+        }
+    }
+
+    private fun mostrarValor(valor: TextView, estado: TextView, texto: String, textoEstado: String, color: String) {
+        val c = Color.parseColor(color)
+        valor.text = texto
+        valor.setTextColor(c)
+        estado.text = textoEstado
+        estado.setTextColor(c)
+    }
+
+    // ===================== CICLO DE VIDA Y SENSORES =====================
 
     override fun onResume() {
         super.onResume()
-        if (isLinearAvailable) {
-            linearAccelSensor?.let {
-                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
-            }
+        linearAccelSensor?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
         accelSensor?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
@@ -313,16 +451,20 @@ class MainActivity : Activity(), SensorEventListener {
     override fun onPause() {
         super.onPause()
         sensorManager.unregisterListener(this)
+        detenerAlarma()
         if (isBiometricMeasuring) {
             isBiometricMeasuring = false
             biometricProgressRunnable?.let { handler.removeCallbacks(it) }
             pbBiometricProgress.visibility = View.GONE
             btnStartBiometric.isEnabled = true
+            tvBiometricStatus.text = "Medición cancelada. Toca para empezar de nuevo."
+            tvBiometricStatus.setTextColor(Color.parseColor("#F8FAFC"))
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
         toneGenerator?.release()
         toneGenerator = null
     }
@@ -332,137 +474,19 @@ class MainActivity : Activity(), SensorEventListener {
 
         val sensorType = event.sensor.type
 
-        // 1. SISMOLOGÍA (Verificación de Movimiento Sostenido durante 10 Segundos)
+        // 1. SISMOLOGÍA
         if ((isLinearAvailable && sensorType == Sensor.TYPE_LINEAR_ACCELERATION) ||
             (!isLinearAvailable && sensorType == Sensor.TYPE_ACCELEROMETER)
         ) {
             processSeismicSensor(event)
         }
 
-        // 2. CAPTURA DE MUESTRAS Z PARA BIOMETRÍA
+        // 2. CAPTURA DE MUESTRAS PARA BIOMETRÍA (los tres ejes, con su hora exacta)
         if (sensorType == Sensor.TYPE_ACCELEROMETER && isBiometricMeasuring) {
-            zRawSamples.add(event.values[2])
-        }
-    }
-
-    private fun processSeismicSensor(event: SensorEvent) {
-        val x = event.values[0]
-        val y = event.values[1]
-        val z = event.values[2]
-
-        val rawMag: Float = if (isLinearAvailable) {
-            sqrt((x * x + y * y + z * z).toDouble()).toFloat()
-        } else {
-            val totalMag = sqrt((x * x + y * y + z * z).toDouble()).toFloat()
-            abs(totalMag - SensorManager.GRAVITY_EARTH)
-        }
-
-        // Filtro pasa-bajas (alpha = 0.15f)
-        filteredPga = alphaPga * rawMag + (1f - alphaPga) * filteredPga
-
-        val now = System.currentTimeMillis()
-
-        // Actualizar sismograma en tiempo real
-        sismografoView.agregarPunto(filteredPga)
-
-        // Detección de movimiento sísmico activo
-        val isMotionActive = filteredPga >= 0.05f
-
-        if (isMotionActive) {
-            if (quakeStartTimestamp == 0L) {
-                quakeStartTimestamp = now
-                is10sAlertTriggered = false
-            }
-
-            val sustainedDurationMs = now - quakeStartTimestamp
-            val sustainedSec = (sustainedDurationMs / 1000L).coerceAtMost(10L).toInt()
-
-            pgaHistory10s.add(PgaSample(now, filteredPga))
-            pgaHistory10s.removeAll { now - it.timestamp > 10000L }
-
-            val pgaPeak10s = pgaHistory10s.maxOfOrNull { it.pga } ?: filteredPga
-
-            if (sustainedSec < 10) {
-                // Durante los 10s de movimiento sostenido:
-                currentPgaColor = "#FFA726"
-                sismografoView.setStrokeColor(currentPgaColor)
-                tvStatusBadge.text = String.format(Locale.getDefault(), "⏳ EVALUANDO MOVIMIENTO SOSTENIDO (%ds / 10s)", sustainedSec)
-                tvStatusBadge.setTextColor(Color.parseColor(currentPgaColor))
-                tvAceleracionPico.setTextColor(Color.parseColor(currentPgaColor))
-                tvNivelMovimiento.text = "Movimiento en verificación..."
-                tvQuake30sTimer.text = String.format(Locale.getDefault(), "⏳ Verificando si el movimiento persiste por 10s: %ds transcurridos", sustainedSec)
-            } else {
-                // ¡10 SEGUNDOS CUMPLIDOS DE MOVIMIENTO CONTINUO! -> Emitir clasificación de alerta
-                val (badgeText, movementText, mercalliText, colorHex, soundLevel) = when {
-                    pgaPeak10s >= 1.20f -> Quint(
-                        "🚨 ALERTA MÁXIMA: SISMO FUERTE DETECTADO",
-                        "Sacudida Intensa Sostenida (10s)",
-                        "Intensidad: VI+ - Fuerte / Destructivo. Movimiento verificado por 10s. ¡Evacua!",
-                        "#FF5252",
-                        3
-                    )
-                    pgaPeak10s >= 0.35f -> Quint(
-                        "▲ SISMO MODERADO DETECTADO",
-                        "Movimiento Moderado Sostenido (10s)",
-                        "Intensidad: IV - V - Moderado. Movimiento verificado por 10s.",
-                        "#FFA726",
-                        2
-                    )
-                    else -> Quint(
-                        "▲ SISMO LEVE DETECTADO",
-                        "Movimiento Leve Sostenido (10s)",
-                        "Intensidad: II - III - Leve. Movimiento verificado por 10s.",
-                        "#29B6F6",
-                        1
-                    )
-                }
-
-                currentPgaColor = colorHex
-                sismografoView.setStrokeColor(colorHex)
-                tvStatusBadge.text = badgeText
-                tvStatusBadge.setTextColor(Color.parseColor(colorHex))
-                tvAceleracionPico.setTextColor(Color.parseColor(colorHex))
-                tvNivelMovimiento.text = movementText
-                tvMercalliDetalle.text = mercalliText
-                tvQuake30sTimer.text = "✅ Sismo sostenido verificado durante 10 segundos continuos."
-
-                if (!is10sAlertTriggered) {
-                    is10sAlertTriggered = true
-                    playSeismicTone(soundLevel)
-                }
-            }
-        } else {
-            // El movimiento se detuvo antes de 10s -> Reiniciar
-            quakeStartTimestamp = 0L
-            is10sAlertTriggered = false
-            pgaHistory10s.clear()
-
-            currentPgaColor = "#00E676"
-            sismografoView.setStrokeColor(currentPgaColor)
-            tvStatusBadge.text = "● SISTEMA NORMAL"
-            tvStatusBadge.setTextColor(Color.parseColor(currentPgaColor))
-            tvAceleracionPico.setTextColor(Color.parseColor(currentPgaColor))
-            tvNivelMovimiento.text = "Sin Actividad Sísmica Sostenida"
-            tvQuake30sTimer.text = "⏳ Esperando detección de movimiento sostenido por 10s..."
-            tvMercalliDetalle.text = "Intensidad: I - Imperceptible. Sistema monitoreando."
-        }
-
-        tvAceleracionPico.text = String.format(Locale.getDefault(), "PGA Inmediato: %.2f m/s²", filteredPga)
-    }
-
-    private fun playSeismicTone(level: Int) {
-        val now = System.currentTimeMillis()
-        if (now - lastToneTime < 1000L) return
-        lastToneTime = now
-
-        try {
-            when (level) {
-                1 -> toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
-                2 -> toneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 250)
-                3 -> toneGenerator?.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 400)
-            }
-        } catch (_: Exception) {
-            // Ignorar
+            tiemposNs.add(event.timestamp)
+            muestrasX.add(event.values[0])
+            muestrasY.add(event.values[1])
+            muestrasZ.add(event.values[2])
         }
     }
 
@@ -470,6 +494,8 @@ class MainActivity : Activity(), SensorEventListener {
         // No usado
     }
 
-    private data class PgaSample(val timestamp: Long, val pga: Float)
-    private data class Quint<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)
+    private companion object {
+        const val DURACION_BIOMETRIA_MS = 20_000L
+        const val PERIODO_BIOMETRIA_US = 5_000 // 200 Hz (el máximo permitido sin permisos extra)
+    }
 }

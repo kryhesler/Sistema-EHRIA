@@ -5,6 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:fitsSystemWindows="true"
+    android:keepScreenOn="true"
     android:paddingTop="32dp"
     android:background="#121824">
 
@@ -137,6 +138,17 @@
                             android:gravity="center"
                             android:layout_marginTop="10dp" />
 
+                        <Button
+                            android:id="@+id/btnRestablecer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:text="🔕 Silenciar y restablecer"
+                            android:textSize="13sp"
+                            android:backgroundTint="#475569"
+                            android:textColor="#FFFFFF"
+                            android:visibility="gone" />
+
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
 
@@ -247,7 +259,7 @@
                             android:id="@+id/tvBiometricInstruction"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Recuéstate boca arriba, coloca el teléfono plano sobre tu pecho y toca 'Calcular'."
+                            android:text="Recuéstate boca arriba, coloca el teléfono plano sobre el centro del pecho, quédate quieto y toca 'Calcular'."
                             android:textSize="12sp"
                             android:textColor="#94A3B8"
                             android:gravity="center"
@@ -257,7 +269,7 @@
                             android:id="@+id/btnStartBiometric"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="🩺 Tocar para Calcular Pulso y Respiración (15s)"
+                            android:text="🩺 Tocar para Calcular Pulso y Respiración (20s)"
                             android:backgroundTint="#0284C7"
                             android:textColor="#FFFFFF"
                             android:textSize="13sp"
@@ -373,6 +385,16 @@
                             </LinearLayout>
 
                         </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvAvisoMedico"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:text="Medición orientativa basada en el acelerómetro. No es un dispositivo médico ni reemplaza la evaluación de un profesional de salud."
+                            android:textSize="11sp"
+                            android:textColor="#94A3B8"
+                            android:gravity="center" />
 
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
