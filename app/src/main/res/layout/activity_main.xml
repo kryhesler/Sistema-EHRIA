@@ -1,226 +1,384 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
+    android:orientation="vertical"
+    android:fitsSystemWindows="true"
+    android:paddingTop="32dp"
     android:background="#121824">
 
+    <!-- Header App -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp"
+        android:gravity="center">
 
-        <!-- App Header -->
         <TextView
             android:id="@+id/tvAppHeader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="🌋 SismoMonitor &amp; VitalSens PRO"
-            android:textSize="24sp"
+            android:textSize="20sp"
             android:textStyle="bold"
-            android:textColor="#F8FAFC"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp" />
+            android:textColor="#F8FAFC" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Sistema de Monitoreo Sísmico y Biométrico Torácico"
-            android:textSize="13sp"
-            android:textColor="#94A3B8"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="2dp"
-            android:layout_marginBottom="16dp" />
-
-        <!-- MÓDULO 1: SISMOLOGÍA Y MOVIMIENTO -->
-        <!-- Card 1.1: Seismic Status & PGA -->
-        <androidx.cardview.widget.CardView
+        <!-- Tab Selector Buttons -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="4dp"
-            android:layout_marginBottom="16dp">
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp"
+            android:weightSum="2">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <Button
+                android:id="@+id/btnTabSeismic"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp"
-                android:gravity="center_horizontal">
+                android:layout_weight="1"
+                android:text="🌋 Sismología (10s)"
+                android:textSize="12sp"
+                android:backgroundTint="#2563EB"
+                android:textColor="#FFFFFF"
+                android:layout_marginEnd="4dp" />
 
-                <TextView
-                    android:id="@+id/tvStatusBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="● SISTEMA NORMAL"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:textColor="#00E676"
-                    android:paddingStart="12dp"
-                    android:paddingTop="6dp"
-                    android:paddingEnd="12dp"
-                    android:paddingBottom="6dp"
-                    android:background="#1500E676" />
-
-                <TextView
-                    android:id="@+id/tvNivelMovimiento"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Sin Actividad Sísmica"
-                    android:textSize="22sp"
-                    android:textStyle="bold"
-                    android:textColor="#F8FAFC"
-                    android:gravity="center"
-                    android:layout_marginTop="12dp" />
-
-                <TextView
-                    android:id="@+id/tvAceleracionPico"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="PGA: 0.00 m/s²"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="#00E676"
-                    android:layout_marginTop="6dp" />
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- Card 1.2: Live Seismograph -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="4dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
+            <Button
+                android:id="@+id/btnTabBiometric"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📈 SISMOGRAMA EN TIEMPO REAL (PGA)"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:textColor="#94A3B8"
-                    android:layout_marginBottom="10dp" />
-
-                <com.example.detectormovimiento.SismografoView
-                    android:id="@+id/sismografoView"
-                    android:layout_width="match_parent"
-                    android:layout_height="220dp" />
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- Card 1.3: Mercalli Intensity Detail -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="4dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📊 INTENSIDAD ESTIMADA (ESCALA MERCALLI)"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:textColor="#94A3B8"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/tvMercalliDetalle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Intensidad: I - Imperceptible. Sin movimiento sísmico perceptible en el área."
-                    android:textSize="14sp"
-                    android:textColor="#CBD5E1"
-                    android:lineSpacingExtra="2dp" />
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- MÓDULO 2: MONITOR DE FRECUENCIA RESPIRATORIA (RPM) -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="4dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp"
-                android:gravity="center_horizontal">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🫁 MONITOR DE FRECUENCIA RESPIRATORIA (PECHO)"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:textColor="#38BDF8"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Apoya el teléfono boca arriba sobre tu pecho para medir tus RPM"
-                    android:textSize="12sp"
-                    android:textColor="#64748B"
-                    android:gravity="center"
-                    android:layout_marginBottom="12dp" />
-
-                <TextView
-                    android:id="@+id/tvRpmEstado"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Analizando..."
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="#38BDF8"
-                    android:gravity="center" />
-
-                <TextView
-                    android:id="@+id/tvRpmValues"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="-- RPM"
-                    android:textSize="48sp"
-                    android:textStyle="bold"
-                    android:textColor="#00E676"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Respiraciones Por Minuto (Ventana 30s)"
-                    android:textSize="11sp"
-                    android:textColor="#94A3B8" />
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
+                android:layout_weight="1"
+                android:text="🩺 Signos Vitales"
+                android:textSize="12sp"
+                android:backgroundTint="#334155"
+                android:textColor="#94A3B8"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
     </LinearLayout>
-</ScrollView>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ================= APARTADO 1: SISMOLOGÍA ================= -->
+            <LinearLayout
+                android:id="@+id/layoutSeismicSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="visible">
+
+                <!-- Card Status & 10s Evaluation -->
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="#1E293B"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="20dp"
+                        android:gravity="center_horizontal">
+
+                        <TextView
+                            android:id="@+id/tvStatusBadge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="● SISTEMA NORMAL"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="#00E676"
+                            android:paddingStart="12dp"
+                            android:paddingTop="6dp"
+                            android:paddingEnd="12dp"
+                            android:paddingBottom="6dp"
+                            android:background="#1500E676" />
+
+                        <TextView
+                            android:id="@+id/tvNivelMovimiento"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Sin Actividad Sísmica Sostenida"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
+                            android:textColor="#F8FAFC"
+                            android:gravity="center"
+                            android:layout_marginTop="12dp" />
+
+                        <TextView
+                            android:id="@+id/tvAceleracionPico"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="PGA Inmediato: 0.00 m/s²"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#00E676"
+                            android:layout_marginTop="6dp" />
+
+                        <TextView
+                            android:id="@+id/tvQuake30sTimer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="⏳ Esperando detección de movimiento sostenido por 10s..."
+                            android:textSize="12sp"
+                            android:textColor="#38BDF8"
+                            android:gravity="center"
+                            android:layout_marginTop="10dp" />
+
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <!-- Seismograph Chart -->
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="#1E293B"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="📈 SISMOGRAMA EN TIEMPO REAL"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="#94A3B8"
+                            android:layout_marginBottom="10dp" />
+
+                        <com.example.detectormovimiento.SismografoView
+                            android:id="@+id/sismografoView"
+                            android:layout_width="match_parent"
+                            android:layout_height="220dp" />
+
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <!-- Escala Mercalli -->
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="#1E293B"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="📊 INTENSIDAD ESTIMADA (MOVIMIENTO SOSTENIDO 10S)"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="#94A3B8"
+                            android:layout_marginBottom="8dp" />
+
+                        <TextView
+                            android:id="@+id/tvMercalliDetalle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Intensidad: I - Imperceptible. Sistema monitoreando."
+                            android:textSize="13sp"
+                            android:textColor="#CBD5E1"
+                            android:lineSpacingExtra="2dp" />
+
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+            </LinearLayout>
+
+
+            <!-- ================= APARTADO 2: SIGNOS VITALES (RESPIRACIÓN Y RITMO CARDÍACO) ================= -->
+            <LinearLayout
+                android:id="@+id/layoutBiometricSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="#1E293B"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="20dp"
+                        android:gravity="center_horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🩺 MEDICIÓN DE SIGNOS VITALES SOBRE EL PECHO"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="#38BDF8"
+                            android:layout_marginBottom="8dp" />
+
+                        <TextView
+                            android:id="@+id/tvBiometricInstruction"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Recuéstate boca arriba, coloca el teléfono plano sobre tu pecho y toca 'Calcular'."
+                            android:textSize="12sp"
+                            android:textColor="#94A3B8"
+                            android:gravity="center"
+                            android:layout_marginBottom="16dp" />
+
+                        <Button
+                            android:id="@+id/btnStartBiometric"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="🩺 Tocar para Calcular Pulso y Respiración (15s)"
+                            android:backgroundTint="#0284C7"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp"
+                            android:layout_marginBottom="12dp" />
+
+                        <ProgressBar
+                            android:id="@+id/pbBiometricProgress"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="8dp"
+                            android:max="100"
+                            android:progress="0"
+                            android:progressTint="#38BDF8"
+                            android:visibility="gone"
+                            android:layout_marginBottom="12dp" />
+
+                        <TextView
+                            android:id="@+id/tvBiometricStatus"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Estado: Listo para medir"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="#F8FAFC"
+                            android:gravity="center"
+                            android:layout_marginBottom="16dp" />
+
+                        <!-- Results display -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:weightSum="2"
+                            android:baselineAligned="false">
+
+                            <!-- Frecuencia Respiratoria -->
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:gravity="center"
+                                android:padding="12dp"
+                                android:background="#0F172A">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="🫁 RESPIRACIÓN"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="#38BDF8" />
+
+                                <TextView
+                                    android:id="@+id/tvRpmEstado"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Sin medición"
+                                    android:textSize="12sp"
+                                    android:textColor="#38BDF8"
+                                    android:gravity="center"
+                                    android:layout_marginTop="4dp" />
+
+                                <TextView
+                                    android:id="@+id/tvRpmValues"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="-- RPM"
+                                    android:textSize="28sp"
+                                    android:textStyle="bold"
+                                    android:textColor="#00E676"
+                                    android:layout_marginTop="4dp" />
+                            </LinearLayout>
+
+                            <!-- Ritmo Cardíaco -->
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:gravity="center"
+                                android:padding="12dp"
+                                android:background="#0F172A"
+                                android:layout_marginStart="8dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="🫀 RITMO CARDÍACO"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="#F43F5E" />
+
+                                <TextView
+                                    android:id="@+id/tvBpmEstado"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Sin medición"
+                                    android:textSize="12sp"
+                                    android:textColor="#F43F5E"
+                                    android:gravity="center"
+                                    android:layout_marginTop="4dp" />
+
+                                <TextView
+                                    android:id="@+id/tvBpmValues"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="-- BPM"
+                                    android:textSize="28sp"
+                                    android:textStyle="bold"
+                                    android:textColor="#F43F5E"
+                                    android:layout_marginTop="4dp" />
+                            </LinearLayout>
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
