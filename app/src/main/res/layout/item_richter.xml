@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una fila de la escala de Richter: categoría y rango de magnitud. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/fondo_chip"
+    android:backgroundTint="#00000000"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingTop="7dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="7dp">
+
+    <TextView
+        android:id="@+id/tvRichterNombre"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/texto_tenue"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/tvRichterRango"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/texto_tenue"
+        android:textSize="13sp" />
+</LinearLayout>

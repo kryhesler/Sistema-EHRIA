@@ -178,6 +178,84 @@
                         app:icon="@drawable/ic_silenciar" />
                 </LinearLayout>
 
+                <!-- Escala de Richter (estimada) -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:text="MAGNITUD · ESCALA DE RICHTER"
+                        android:drawableStart="@drawable/ic_barras" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:id="@+id/tvMagnitud"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="--"
+                            android:textSize="48sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/texto_tenue" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="16dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tvCategoriaRichter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Sin sismos detectados"
+                                android:textSize="18sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+
+                            <TextView
+                                android:id="@+id/tvDetalleRichter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Se estima al confirmar un sismo"
+                                android:textSize="13sp"
+                                android:textColor="@color/texto_tenue" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Escala completa; la categoría actual se resalta desde el código -->
+                    <LinearLayout
+                        android:id="@+id/listaRichter"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Magnitud aproximada (±1): se calcula con la sacudida medida suponiendo un epicentro a unos 30 km. La magnitud oficial la publica INETER."
+                        android:textSize="12sp"
+                        android:textColor="#64748B"
+                        android:lineSpacingExtra="2dp"
+                        android:drawableStart="@drawable/ic_info"
+                        android:drawablePadding="10dp"
+                        android:drawableTint="#64748B" />
+                </LinearLayout>
+
                 <!-- Sismograma -->
                 <LinearLayout
                     style="@style/Ehria.Tarjeta"
@@ -211,8 +289,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="8dp"
-                        android:text="INTENSIDAD ESTIMADA"
-                        android:drawableStart="@drawable/ic_barras" />
+                        android:text="INTENSIDAD MERCALLI · EN ESTE LUGAR"
+                        android:drawableStart="@drawable/ic_ubicacion" />
 
                     <TextView
                         android:id="@+id/tvMercalliDetalle"

@@ -17,6 +17,8 @@ class HistorialRepositorio(private val carpeta: File) {
         val nivel: Nivel,
         val pgaPico: Float,
         val duracionS: Int,
+        /** Pico sin filtrar, para estimar magnitud (Richter) e intensidad (Mercalli). */
+        val pgaPicoBruto: Float = pgaPico,
     )
 
     enum class TipoMedicion { RESPIRACION, PULSO }
@@ -60,17 +62,20 @@ class HistorialRepositorio(private val carpeta: File) {
     }
 
     private fun formatearSismo(r: RegistroSismo) =
-        listOf(r.id, r.fechaMs, r.nivel.name, r.pgaPico, r.duracionS).joinToString("\t")
+        listOf(r.id, r.fechaMs, r.nivel.name, r.pgaPico, r.duracionS, r.pgaPicoBruto).joinToString("\t")
 
     private fun parsearSismo(linea: String): RegistroSismo? {
         val c = linea.split('\t')
         if (c.size < 5) return null
+        val pgaPico = c[3].toFloatOrNull() ?: return null
         return RegistroSismo(
             id = c[0].toLongOrNull() ?: return null,
             fechaMs = c[1].toLongOrNull() ?: return null,
             nivel = Nivel.entries.firstOrNull { it.name == c[2] } ?: return null,
-            pgaPico = c[3].toFloatOrNull() ?: return null,
+            pgaPico = pgaPico,
             duracionS = c[4].toIntOrNull() ?: return null,
+            // Registros anteriores no traen el pico sin filtrar: se usa el filtrado.
+            pgaPicoBruto = c.getOrNull(5)?.toFloatOrNull() ?: pgaPico,
         )
     }
 

@@ -21,12 +21,15 @@ class HistorialRepositorioTest {
     fun guardaYLeeSismos_masRecientePrimero() {
         val repo = HistorialRepositorio(carpeta.root)
         repo.guardarSismo(RegistroSismo(1, 1_000, Nivel.LEVE, 0.1f, 11))
-        repo.guardarSismo(RegistroSismo(2, 5_000, Nivel.FUERTE, 1.8f, 25))
+        repo.guardarSismo(RegistroSismo(2, 5_000, Nivel.FUERTE, 1.8f, 25, pgaPicoBruto = 2.6f))
 
         val sismos = HistorialRepositorio(carpeta.root).sismos()
         assertEquals(listOf(2L, 1L), sismos.map { it.id })
         assertEquals(Nivel.FUERTE, sismos[0].nivel)
         assertEquals(1.8f, sismos[0].pgaPico, 0.001f)
+        assertEquals(2.6f, sismos[0].pgaPicoBruto, 0.001f)
+        // Un registro guardado antes de este campo usa el pico filtrado.
+        assertEquals(0.1f, sismos[1].pgaPicoBruto, 0.001f)
     }
 
     @Test

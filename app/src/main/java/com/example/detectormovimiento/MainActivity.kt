@@ -64,6 +64,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var tvAceleracionPico: TextView
     private lateinit var tvQuake30sTimer: TextView
     private lateinit var tvMercalliDetalle: TextView
+    private lateinit var tvMagnitud: TextView
+    private lateinit var tvCategoriaRichter: TextView
+    private lateinit var tvDetalleRichter: TextView
+    private lateinit var listaRichter: LinearLayout
     private lateinit var btnRestablecer: Button
     private lateinit var sismografoView: SismografoView
 
@@ -177,6 +181,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvAceleracionPico = findViewById(R.id.tvAceleracionPico)
         tvQuake30sTimer = findViewById(R.id.tvQuake30sTimer)
         tvMercalliDetalle = findViewById(R.id.tvMercalliDetalle)
+        tvMagnitud = findViewById(R.id.tvMagnitud)
+        tvCategoriaRichter = findViewById(R.id.tvCategoriaRichter)
+        tvDetalleRichter = findViewById(R.id.tvDetalleRichter)
+        listaRichter = findViewById(R.id.listaRichter)
         btnRestablecer = findViewById(R.id.btnRestablecer)
         sismografoView = findViewById(R.id.sismografoView)
 
@@ -262,6 +270,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         findViewById<Button>(R.id.btnBorrarHistorial).setOnClickListener { confirmarBorrarHistorial() }
 
+        mostrarEscalaRichter(null)
         mostrarErrorAnteriorSiHay()
     }
 
@@ -356,6 +365,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 nivel = estado.nivel,
                 pgaPico = estado.pgaPico,
                 duracionS = estado.duracionMovimientoS,
+                pgaPicoBruto = estado.pgaPicoBruto,
             )
             sismoActual = registro
             // Guardar al empezar, al subir de nivel y cada 5 s (por si la app se cierra de golpe).
@@ -426,25 +436,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
 
             Fase.ALERTA -> {
-                val textos = when (estado.nivel) {
-                    Nivel.FUERTE -> Triple(
-                        "ALERTA MÁXIMA · SISMO FUERTE",
-                        "Sacudida Intensa Sostenida",
-                        "Intensidad: VI+ - Fuerte / Destructivo. Agáchate, cúbrete y sujétate. Al terminar, evacua."
-                    )
-                    Nivel.MODERADO -> Triple(
-                        "SISMO MODERADO DETECTADO",
-                        "Movimiento Moderado Sostenido",
-                        "Intensidad: IV - V - Moderado. Agáchate, cúbrete y sujétate."
-                    )
-                    else -> Triple(
-                        "SISMO LEVE DETECTADO",
-                        "Movimiento Leve Sostenido",
-                        "Intensidad: II - III - Leve. Mantén la calma y aléjate de ventanas."
-                    )
+                val magnitud = EscalaSismica.magnitudEstimada(estado.pgaPicoBruto)
+                val mercalli = EscalaSismica.intensidadMercalli(estado.pgaPicoBruto)
+                val instruccion = when (estado.nivel) {
+                    Nivel.FUERTE -> "Agáchate, cúbrete y sujétate. Al terminar, evacua."
+                    Nivel.MODERADO -> "Agáchate, cúbrete y sujétate."
+                    else -> "Mantén la calma y aléjate de ventanas."
                 }
+                val textos = Triple(
+                    when (estado.nivel) {
+                        Nivel.FUERTE -> "ALERTA MÁXIMA · SACUDIDA FUERTE"
+                        Nivel.MODERADO -> "SACUDIDA MODERADA DETECTADA"
+                        else -> "SACUDIDA LEVE DETECTADA"
+                    },
+                    if (magnitud != null) {
+                        String.format(
+                            Locale.getDefault(), "Magnitud ≈ %.1f · %s",
+                            magnitud, EscalaSismica.categoriaRichter(magnitud).nombre
+                        )
+                    } else "Sismo en curso",
+                    "Intensidad ${EscalaSismica.romano(mercalli)} (${EscalaSismica.descripcionMercalli(mercalli)}) en este lugar. $instruccion"
+                )
+                mostrarEscalaRichter(magnitud)
                 color = colorNivel(estado.nivel)
-                textoGlobal = "Sismo ${nombreNivel(estado.nivel).lowercase(Locale.getDefault())}"
+                textoGlobal = "Sacudida ${nombreNivel(estado.nivel).lowercase(Locale.getDefault())}"
                 icono = R.drawable.ic_alerta
                 tvStatusBadge.text = textos.first
                 tvNivelMovimiento.text = textos.second
@@ -452,7 +467,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 tvQuake30sTimer.text = String.format(
                     Locale.getDefault(),
                     "Sismo verificado: %d s de movimiento · pico %.2f m/s²",
-                    estado.duracionMovimientoS, estado.pgaPico
+                    estado.duracionMovimientoS, estado.pgaPicoBruto
                 )
                 btnRestablecer.visibility = View.VISIBLE
             }
@@ -472,6 +487,42 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ivEstadoSismo.imageTintList = ColorStateList.valueOf(c)
         circuloEstado.backgroundTintList = ColorStateList.valueOf(conAlfa(c, 0x26))
         ponerEstadoGlobal(icono, textoGlobal, color)
+    }
+
+    /** Llena la tarjeta de Richter y resalta la categoría de [magnitud] (null = sin sismo). */
+    private fun mostrarEscalaRichter(magnitud: Double?) {
+        val actual = magnitud?.let { EscalaSismica.categoriaRichter(it) }
+        val color = Color.parseColor(if (actual != null) colorRichter(magnitud) else "#94A3B8")
+        if (magnitud != null && actual != null) {
+            tvMagnitud.text = String.format(Locale.getDefault(), "%.1f", magnitud)
+            tvMagnitud.setTextColor(color)
+            tvCategoriaRichter.text = actual.nombre
+            tvDetalleRichter.text = "Magnitud estimada del último sismo"
+        }
+        listaRichter.removeAllViews()
+        for (categoria in EscalaSismica.CATEGORIAS_RICHTER) {
+            val fila = layoutInflater.inflate(R.layout.item_richter, listaRichter, false)
+            val nombre = fila.findViewById<TextView>(R.id.tvRichterNombre)
+            val rango = fila.findViewById<TextView>(R.id.tvRichterRango)
+            nombre.text = categoria.nombre
+            rango.text = categoria.hasta?.let {
+                String.format(Locale.getDefault(), "%.1f – %.1f", categoria.desde, it - 0.1)
+            } ?: String.format(Locale.getDefault(), "%.1f o más", categoria.desde)
+            if (categoria == actual) {
+                fila.backgroundTintList = ColorStateList.valueOf(conAlfa(color, 0x30))
+                nombre.setTextColor(color)
+                rango.setTextColor(color)
+                nombre.setTypeface(nombre.typeface, android.graphics.Typeface.BOLD)
+                rango.setTypeface(rango.typeface, android.graphics.Typeface.BOLD)
+            }
+            listaRichter.addView(fila)
+        }
+    }
+
+    private fun colorRichter(magnitud: Double) = when {
+        magnitud >= 6.0 -> "#F87171"
+        magnitud >= 4.0 -> "#FBBF24"
+        else -> "#38BDF8"
     }
 
     private fun iniciarAlarma() {
@@ -821,10 +872,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             tvHistorialVacio.text = "Todavía no se han detectado sismos.\nLos sismos confirmados aparecerán aquí."
             layoutHistorialVacio.visibility = if (sismos.isEmpty()) View.VISIBLE else View.GONE
             for (s in sismos) {
+                val magnitud = EscalaSismica.magnitudEstimada(s.pgaPicoBruto)
+                val mercalli = EscalaSismica.intensidadMercalli(s.pgaPicoBruto)
                 agregarItemHistorial(
-                    titulo = "Sismo ${nombreNivel(s.nivel).lowercase(Locale.getDefault())}",
+                    titulo = magnitud?.let {
+                        String.format(
+                            Locale.getDefault(), "Magnitud ≈ %.1f · %s", it, EscalaSismica.categoriaRichter(it).nombre
+                        )
+                    } ?: "Sacudida ${nombreNivel(s.nivel).lowercase(Locale.getDefault())}",
                     detalle = String.format(
-                        Locale.getDefault(), "Pico %.2f m/s² · %d s de movimiento", s.pgaPico, s.duracionS
+                        Locale.getDefault(), "Intensidad %s · pico %.2f m/s² · %d s",
+                        EscalaSismica.romano(mercalli), s.pgaPicoBruto, s.duracionS
                     ),
                     fechaMs = s.fechaMs,
                     color = colorNivel(s.nivel),
@@ -884,7 +942,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun nombreNivel(nivel: Nivel) = when (nivel) {
         Nivel.FUERTE -> "Fuerte"
-        Nivel.MODERADO -> "Moderado"
+        Nivel.MODERADO -> "Moderada"
         Nivel.LEVE -> "Leve"
         Nivel.NINGUNO -> "Sin clasificar"
     }

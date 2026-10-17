@@ -31,6 +31,8 @@ class DetectorSismico(
         val nivel: Nivel,
         val pga: Float,
         val pgaPico: Float,
+        /** Pico de la señal sin filtrar: es el que usan las escalas de Mercalli y Richter. */
+        val pgaPicoBruto: Float,
         val umbral: Float,
         val segundosEvaluados: Int,
         /** Desde que empezó el movimiento hasta la última vez que superó el umbral. */
@@ -51,6 +53,7 @@ class DetectorSismico(
     private var inicioEventoMs = 0L
     private var ultimoSobreUmbralMs = 0L
     private var pgaPico = 0f
+    private var pgaPicoBruto = 0f
 
     private var ruidoBase = 0f
     private var sumaCalibracion = 0.0
@@ -83,6 +86,7 @@ class DetectorSismico(
                     inicioEventoMs = ahoraMs
                     ultimoSobreUmbralMs = ahoraMs
                     pgaPico = pgaFiltrado
+                    pgaPicoBruto = magnitud
                 } else {
                     // Seguir lentamente el ruido de fondo solo cuando no hay evento.
                     val beta = (dtMs / constanteRuidoMs).coerceIn(0f, 1f)
@@ -94,6 +98,7 @@ class DetectorSismico(
                 if (pgaFiltrado >= umbral) {
                     ultimoSobreUmbralMs = ahoraMs
                     pgaPico = max(pgaPico, pgaFiltrado)
+                    pgaPicoBruto = max(pgaPicoBruto, magnitud)
                 }
                 if (ahoraMs - ultimoSobreUmbralMs > toleranciaPausaMs) {
                     reiniciarEvento()
@@ -108,6 +113,7 @@ class DetectorSismico(
                 if (pgaFiltrado >= umbral) {
                     ultimoSobreUmbralMs = ahoraMs
                     pgaPico = max(pgaPico, pgaFiltrado)
+                    pgaPicoBruto = max(pgaPicoBruto, magnitud)
                     val nuevoNivel = clasificar(pgaPico)
                     if (nuevoNivel > nivel) {
                         nivel = nuevoNivel
@@ -124,7 +130,7 @@ class DetectorSismico(
         val segundos = if (enEvento) ((ahoraMs - inicioEventoMs) / 1000L).toInt() else 0
         val duracionMovimiento = if (enEvento) ((ultimoSobreUmbralMs - inicioEventoMs) / 1000L).toInt() else 0
 
-        return Estado(fase, nivel, pgaFiltrado, pgaPico, umbral, segundos, duracionMovimiento, alertaNueva)
+        return Estado(fase, nivel, pgaFiltrado, pgaPico, pgaPicoBruto, umbral, segundos, duracionMovimiento, alertaNueva)
     }
 
     /** Botón "restablecer": vuelve a vigilancia normal sin perder la calibración. */
@@ -136,6 +142,7 @@ class DetectorSismico(
         fase = Fase.NORMAL
         nivel = Nivel.NINGUNO
         pgaPico = 0f
+        pgaPicoBruto = 0f
     }
 
     companion object {

@@ -75,6 +75,9 @@ class DetectorSismicoTest {
         assertTrue("Confirma unos 10 s después de empezar ($tAlerta ms)", tAlerta in 19_000L..21_500L)
         assertEquals(1, estados.count { it.alertaNueva })
         assertEquals(Nivel.MODERADO, estados[primeraAlerta].nivel)
+        // El pico sin filtrar (para Richter y Mercalli) llega al máximo real de la sacudida.
+        assertTrue(estados[primeraAlerta].pgaPicoBruto >= estados[primeraAlerta].pgaPico)
+        assertTrue(estados[primeraAlerta].pgaPicoBruto > 0.55f)
         // La alerta sigue visible después de que termina la sacudida.
         assertEquals(Fase.ALERTA, estados.last().fase)
     }
