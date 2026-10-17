@@ -28,7 +28,6 @@ import android.text.Spanned
 import android.text.style.RelativeSizeSpan
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageView
@@ -169,13 +168,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var robotDespierto = false
     private var ultimoSaludoMs = 0L
     private var hablandoSaludo = false
-    private var indiceGrupoPanel = 0
-    private var indiceTarjetaSignos = 1
     private lateinit var layoutRobot: View
     private lateinit var caraRobot: CaraRobotView
     private lateinit var tvBurbuja: TextView
-    private lateinit var scrollHerramienta: ScrollView
-    private lateinit var contenedorHerramienta: LinearLayout
+    // Primeros auxilios en modo robot
+    private lateinit var columnaGuia: View
+    private lateinit var columnaResultado: View
+    private lateinit var grupoModoRobot: MaterialButtonToggleGroup
+    private lateinit var grupoSexoRobot: MaterialButtonToggleGroup
+    private lateinit var ivGuiaRobot: ImageView
+    private lateinit var tvGuiaRobot: TextView
+    private lateinit var tvValorRobot: TextView
+    private lateinit var tvUnidadRobot: TextView
+    private lateinit var tvEstadoValorRobot: TextView
+    private lateinit var pbRobot: LinearProgressIndicator
+    private lateinit var btnMedirRobot: MaterialButton
+    /** Último valor mostrado de cada medición: (texto, estado, color). */
+    private val valoresRobot = mutableMapOf<TipoMedicion, Triple<String, String, String>>()
+    private var picoOndaVital = 0f
+    // Señal con signo para el sismógrafo de la cara (desvío respecto del promedio lento).
+    private var mediaSismoX = Float.NaN
+    private var mediaSismoY = 0f
+    private var mediaSismoZ = 0f
     private lateinit var barraRobot: View
     private lateinit var tvRobotEstado: TextView
     private lateinit var tvRobotInfo: TextView
@@ -206,7 +220,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var ivBotiquin: ImageView
     private lateinit var tvBotiquinEstado: TextView
     private lateinit var btnEstacionPuerta: Button
-    private lateinit var tarjetaSignos: View
     // Interruptor de la pestaña Sismos. No se guarda: al abrir la app siempre vigila, por seguridad.
     private var deteccionActiva = true
     private var enPestanaSignos = false
@@ -573,7 +586,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val estado = detector.procesar(magnitud, ahora)
 
         sismografoView.agregarPunto(estado.pga)
-        alimentarSismografoRobot(estado)
+        alimentarSismografoRobot(estado, x, y, z)
         registrarSismo(estado)
 
         if (estado.alertaNueva) {
@@ -835,8 +848,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         layoutRobot = findViewById(R.id.layoutRobot)
         caraRobot = findViewById(R.id.caraRobot)
         tvBurbuja = findViewById(R.id.tvBurbuja)
-        scrollHerramienta = findViewById(R.id.scrollHerramienta)
-        contenedorHerramienta = findViewById(R.id.contenedorHerramienta)
+        columnaGuia = findViewById(R.id.columnaGuia)
+        columnaResultado = findViewById(R.id.columnaResultado)
+        grupoModoRobot = findViewById(R.id.grupoModoRobot)
+        grupoSexoRobot = findViewById(R.id.grupoSexoRobot)
+        ivGuiaRobot = findViewById(R.id.ivGuiaRobot)
+        tvGuiaRobot = findViewById(R.id.tvGuiaRobot)
+        tvValorRobot = findViewById(R.id.tvValorRobot)
+        tvUnidadRobot = findViewById(R.id.tvUnidadRobot)
+        tvEstadoValorRobot = findViewById(R.id.tvEstadoValorRobot)
+        pbRobot = findViewById(R.id.pbRobot)
+        btnMedirRobot = findViewById(R.id.btnMedirRobot)
         barraRobot = findViewById(R.id.barraRobot)
         tvRobotEstado = findViewById(R.id.tvRobotEstado)
         tvRobotInfo = findViewById(R.id.tvRobotInfo)
@@ -845,7 +867,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         btnRobotHerramienta = findViewById(R.id.btnRobotHerramienta)
         tarjetaSismograma = findViewById(R.id.tarjetaSismograma)
         sismografoRobot.cuadricula = false
-        sismografoRobot.setGrosorLinea(3f)
+        sismografoRobot.setGrosorLinea(2.5f)
+        sismografoRobot.zonaDesvanecida = { caraRobot.limitesHorizontales() }
+        sismografoRobot.centroLinea = { caraRobot.centroVertical() }
+        sismografoRobot.alturaOnda = 170f * resources.displayMetrics.density
+
+        grupoModoRobot.addOnButtonCheckedListener { _, id, marcado ->
+            if (marcado) grupoPanel.check(if (id == R.id.btnRobotPulso) R.id.btnPanelPulso else R.id.btnPanelRespiracion)
+        }
+        grupoSexoRobot.addOnButtonCheckedListener { _, id, marcado ->
+            if (marcado) grupoSexo.check(if (id == R.id.btnRobotMujer) R.id.btnMujer else R.id.btnHombre)
+        }
+        btnMedirRobot.setOnClickListener { alTocarMedir(panelSignos) }
+        grupoModoRobot.check(if (panelSignos == TipoMedicion.PULSO) R.id.btnRobotPulso else R.id.btnRobotRespiracion)
+        grupoSexoRobot.check(if (esMujer) R.id.btnRobotMujer else R.id.btnRobotHombre)
+        actualizarGuiaRobot()
+        mostrarResultadoRobot()
         scrollEstacion = findViewById(R.id.scrollEstacion)
         tvEstacionEstado = findViewById(R.id.tvEstacionEstado)
         tvEstacionTitulo = findViewById(R.id.tvEstacionTitulo)
@@ -861,16 +898,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ivBotiquin = findViewById(R.id.ivBotiquin)
         tvBotiquinEstado = findViewById(R.id.tvBotiquinEstado)
         btnEstacionPuerta = findViewById(R.id.btnEstacionPuerta)
-        tarjetaSignos = findViewById(R.id.tarjetaSignos)
 
         btnEstacionPuerta.setOnClickListener { abrirBotiquin(!puertaAbierta) }
         btnRobotBotiquin.setOnClickListener { abrirBotiquin(!puertaAbierta) }
         findViewById<Button>(R.id.btnModoRobot).setOnClickListener { entrarModoEstacion() }
         findViewById<Button>(R.id.btnModoHerramienta).setOnClickListener {
-            entrarModoHerramienta("Modo primeros auxilios. Elige respiración o pulso y sigue las indicaciones.")
+            entrarModoHerramienta("Primeros auxilios. Elige respiración o pulso y te guío paso a paso.")
         }
         btnRobotHerramienta.setOnClickListener {
-            entrarModoHerramienta("Modo primeros auxilios. Elige respiración o pulso y sigue las indicaciones.")
+            entrarModoHerramienta("Primeros auxilios. Elige respiración o pulso y te guío paso a paso.")
         }
         findViewById<View>(R.id.btnSalirRobot).setOnClickListener { atrasEnModoRobot() }
         caraRobot.setOnClickListener {
@@ -914,7 +950,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             actualizarPanelEstacion()
             // Se desconectó el cable con el robot en la pared: sacaron la cabeza.
             if (modoRobot == ModoRobot.ESTACION) {
-                entrarModoHerramienta("Me sacaste de la estación. Modo primeros auxilios: elige respiración o pulso.")
+                entrarModoHerramienta("Ya estoy fuera de la estación. Elige respiración o pulso y te guío paso a paso.")
             }
         }
     }
@@ -1090,13 +1126,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     /** Teléfono colocado en la pared: cara del robot, horizontal, despierta al acercarse alguien. */
     private fun entrarModoEstacion() {
         if (medicionActiva) return
-        devolverTarjetaSignos()
         modoRobot = ModoRobot.ESTACION
         if (navInferior.selectedItemId != R.id.nav_sismos) navInferior.selectedItemId = R.id.nav_sismos
         mostrarCapaRobot(true)
-        scrollHerramienta.visibility = View.GONE
-        barraRobot.visibility = View.VISIBLE
-        tvRobotInfo.visibility = View.VISIBLE
+        mostrarHerramientaRobot(false)
         ocultarSismografoRobot()
         presencia.reiniciar()
         retiro.olvidarReferencia()
@@ -1110,10 +1143,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun entrarModoHerramienta(anuncio: String) {
         modoRobot = ModoRobot.HERRAMIENTA
         mostrarCapaRobot(true)
-        moverTarjetaSignosAlRobot()
-        scrollHerramienta.visibility = View.VISIBLE
-        barraRobot.visibility = View.GONE
-        tvRobotInfo.visibility = View.GONE
+        mostrarHerramientaRobot(true)
         ocultarSismografoRobot()
         mostrarAdornosRobot(true)
         actualizarPausaSismos(graciaMs = 0L)
@@ -1127,7 +1157,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun salirModoRobot() {
         if (medicionActiva) cancelarMedicion("Medición detenida.")
-        devolverTarjetaSignos()
         modoRobot = ModoRobot.NINGUNO
         handler.removeCallbacks(dormirRunnable)
         retiro.olvidarReferencia()
@@ -1168,27 +1197,54 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun moverTarjetaSignosAlRobot() {
-        if (tarjetaSignos.parent == contenedorHerramienta) return
-        val origen = tarjetaSignos.parent as ViewGroup
-        indiceGrupoPanel = origen.indexOfChild(grupoPanel)
-        indiceTarjetaSignos = origen.indexOfChild(tarjetaSignos)
-        origen.removeView(grupoPanel)
-        origen.removeView(tarjetaSignos)
-        contenedorHerramienta.addView(grupoPanel)
-        contenedorHerramienta.addView(tarjetaSignos)
+    /** Estación: datos y accesos. Primeros auxilios: guía a la izquierda y resultado a la derecha. */
+    private fun mostrarHerramientaRobot(herramienta: Boolean) {
+        val enHerramienta = if (herramienta) View.VISIBLE else View.GONE
+        val enEstacion = if (herramienta) View.GONE else View.VISIBLE
+        columnaGuia.visibility = enHerramienta
+        columnaResultado.visibility = enHerramienta
+        grupoModoRobot.visibility = enHerramienta
+        barraRobot.visibility = enEstacion
+        tvRobotInfo.visibility = enEstacion
+        if (herramienta) {
+            actualizarGuiaRobot()
+            mostrarResultadoRobot()
+            actualizarBotonesMedicion()
+        }
     }
 
-    private fun devolverTarjetaSignos() {
-        if (tarjetaSignos.parent != contenedorHerramienta) return
-        contenedorHerramienta.removeView(grupoPanel)
-        contenedorHerramienta.removeView(tarjetaSignos)
-        val destino = findViewById<ViewGroup>(R.id.layoutBiometricSection)
-        destino.addView(grupoPanel, indiceGrupoPanel.coerceIn(0, destino.childCount))
-        destino.addView(tarjetaSignos, indiceTarjetaSignos.coerceIn(0, destino.childCount))
+    /** La ilustración y el texto de dónde colocar el teléfono, según la medición y el sexo. */
+    private fun actualizarGuiaRobot() {
+        if (!::ivGuiaRobot.isInitialized) return
+        val respiracion = panelSignos == TipoMedicion.RESPIRACION
+        ivGuiaRobot.setImageResource(
+            when {
+                !respiracion -> R.drawable.ilustracion_pulso
+                esMujer -> R.drawable.ilustracion_respiracion_mujer
+                else -> R.drawable.ilustracion_respiracion_hombre
+            }
+        )
+        tvGuiaRobot.text = when {
+            !respiracion -> "Lado izquierdo del pecho, boca arriba"
+            esMujer -> "Centro del pecho, boca arriba"
+            else -> "Sobre el abdomen, boca arriba"
+        }
+        grupoSexoRobot.visibility = if (respiracion) View.VISIBLE else View.GONE
     }
 
-    private fun scrollDeSignos(): ScrollView = if (modoRobot == ModoRobot.HERRAMIENTA) scrollHerramienta else scrollSignos
+    /** Muestra a la derecha el último valor de la medición elegida, en grande. */
+    private fun mostrarResultadoRobot() {
+        if (!::tvValorRobot.isInitialized) return
+        val respiracion = panelSignos == TipoMedicion.RESPIRACION
+        val (texto, estado, color) = valoresRobot[panelSignos] ?: Triple("--", "Listo para medir", "#94A3B8")
+        val corte = texto.lastIndexOf(' ')
+        tvValorRobot.text = if (corte > 0) texto.substring(0, corte) else texto
+        tvValorRobot.setTextColor(if (texto.startsWith("--")) Color.parseColor("#475569") else Color.parseColor(color))
+        tvUnidadRobot.text = if (respiracion) "respiraciones por minuto" else "latidos por minuto"
+        tvEstadoValorRobot.text = estado
+        tvEstadoValorRobot.setTextColor(Color.parseColor(color))
+    }
+
 
     // ---------- Despertar, saludar y dormir ----------
 
@@ -1297,12 +1353,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // ---------- Sismógrafo en la cara ----------
 
     /** En la estación, el sismógrafo aparece bajo la cara en cuanto el suelo empieza a moverse. */
-    private fun alimentarSismografoRobot(estado: DetectorSismico.Estado) {
+    private fun alimentarSismografoRobot(estado: DetectorSismico.Estado, x: Float, y: Float, z: Float) {
         if (modoRobot != ModoRobot.ESTACION) return
+        // La onda sube y baja como un sismograma: desvío de cada eje respecto de su promedio lento.
+        if (mediaSismoX.isNaN()) {
+            mediaSismoX = x; mediaSismoY = y; mediaSismoZ = z
+        }
+        mediaSismoX += 0.02f * (x - mediaSismoX)
+        mediaSismoY += 0.02f * (y - mediaSismoY)
+        mediaSismoZ += 0.02f * (z - mediaSismoZ)
+        val senal = (x - mediaSismoX) + (y - mediaSismoY) + (z - mediaSismoZ)
         // Escala automática: se ven bien tanto un temblor pequeño como uno fuerte.
-        picoSismografoRobot = maxOf(picoSismografoRobot * 0.995f, estado.pga)
-        sismografoRobot.rango = maxOf(0.25f, picoSismografoRobot * 1.3f)
-        sismografoRobot.agregarPunto(estado.pga)
+        picoSismografoRobot = maxOf(picoSismografoRobot * 0.995f, abs(senal))
+        sismografoRobot.rango = maxOf(0.2f, picoSismografoRobot * 1.2f)
+        sismografoRobot.agregarPunto(senal)
         val fluctua = estado.fase == Fase.EVALUANDO || estado.fase == Fase.ALERTA
         if (fluctua) {
             if (ocultarSismografoPendiente) {
@@ -1310,12 +1374,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 ocultarSismografoPendiente = false
             }
             if (sismografoRobot.visibility != View.VISIBLE) {
+                sismografoRobot.bordeDesvanecido = 0.1f
                 sismografoRobot.visibility = View.VISIBLE
                 despertar(saludar = false)
                 handler.removeCallbacks(dormirRunnable)
                 if (estado.fase == Fase.EVALUANDO) {
                     caraRobot.expresion = CaraRobotView.Expresion.ATENTO
-                    decirEnBurbuja("Siento movimiento. Lo estoy verificando.")
+                    decirEnBurbuja("Percibo un movimiento… lo estoy verificando.")
                 }
             }
         } else if (sismografoRobot.visibility == View.VISIBLE && !ocultarSismografoPendiente) {
@@ -1408,6 +1473,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         layoutPanelRespiracion.visibility = if (respiracion) View.VISIBLE else View.GONE
         layoutPanelPulso.visibility = if (respiracion) View.GONE else View.VISIBLE
         pbBiometricProgress.setIndicatorColor(Color.parseColor(if (respiracion) "#38BDF8" else "#F43F5E"))
+        if (::grupoModoRobot.isInitialized) {
+            grupoModoRobot.check(if (respiracion) R.id.btnRobotRespiracion else R.id.btnRobotPulso)
+            pbRobot.setIndicatorColor(Color.parseColor(if (respiracion) "#38BDF8" else "#F43F5E"))
+            actualizarGuiaRobot()
+            mostrarResultadoRobot()
+            actualizarBotonesMedicion()
+        }
     }
 
     /** Hombres: abdomen. Mujeres: pecho. (El pulso siempre va en el lado izquierdo del pecho.) */
@@ -1421,6 +1493,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             "1. Recuéstate boca arriba.\n2. Pon el teléfono plano, con la pantalla hacia arriba, sobre el CENTRO DEL PECHO (en las mujeres la respiración se nota más en el pecho).\n3. Quédate quieta y respira normal hasta que termine."
         } else {
             "1. Recuéstate boca arriba.\n2. Pon el teléfono plano, con la pantalla hacia arriba, sobre el ABDOMEN, a la altura del ombligo (en los hombres la respiración se nota más en el abdomen).\n3. Quédate quieto y respira normal hasta que termine."
+        }
+        if (::grupoSexoRobot.isInitialized) {
+            grupoSexoRobot.check(if (mujer) R.id.btnRobotMujer else R.id.btnRobotHombre)
+            actualizarGuiaRobot()
         }
     }
 
@@ -1484,7 +1560,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvInstruccionRespiracion.visibility = v
         imgPulso.visibility = v
         tvInstruccionPulso.visibility = v
-        if (!visibles) scrollDeSignos().let { s -> s.post { s.smoothScrollTo(0, 0) } }
+        if (!visibles) scrollSignos.let { s -> s.post { s.smoothScrollTo(0, 0) } }
     }
 
     private fun actualizarBotonesMedicion() {
@@ -1500,6 +1576,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         btnPanelPulso.isEnabled = !medicionActiva
         btnHombre.isEnabled = !medicionActiva
         btnMujer.isEnabled = !medicionActiva
+        if (::btnMedirRobot.isInitialized) {
+            val respiracion = panelSignos == TipoMedicion.RESPIRACION
+            configurarBotonMedir(
+                btnMedirRobot, medicionActiva,
+                if (respiracion) "Medir respiración" else "Medir pulso",
+                if (respiracion) "#0284C7" else "#BE123C",
+            )
+            if (medicionActiva) btnMedirRobot.text = "Detener"
+            btnMedirRobot.isEnabled = hayAcelerometro
+            for (i in 0 until grupoModoRobot.childCount) grupoModoRobot.getChildAt(i).isEnabled = !medicionActiva
+            for (i in 0 until grupoSexoRobot.childCount) grupoSexoRobot.getChildAt(i).isEnabled = !medicionActiva
+        }
     }
 
     private fun configurarBotonMedir(boton: MaterialButton, midiendo: Boolean, texto: String, color: String) {
@@ -1544,6 +1632,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         pbBiometricProgress.visibility = View.VISIBLE
         pbBiometricProgress.progress = 0
+        pbRobot.progress = 0
+        pbRobot.setIndicatorColor(Color.parseColor(if (respiracion) "#38BDF8" else "#F43F5E"))
+        pbRobot.visibility = View.VISIBLE
+        mostrarOndaVital(true)
         if (respiracion) {
             mostrarValor(tvRpmValues, tvRpmEstado, "-- RPM", "Midiendo…", "#38BDF8")
             ponerEstadoMedicion("Midiendo la respiración… respira normal", Tono.PROGRESO)
@@ -1559,10 +1651,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val transcurrido = SystemClock.elapsedRealtime() - biometricStartTime
                 if (respiracion) {
                     pbBiometricProgress.progress = ((transcurrido * 100) / DURACION_RESPIRACION_MS).toInt().coerceIn(0, 100)
+                    pbRobot.progress = pbBiometricProgress.progress
                     tvCuenta.text = "${((DURACION_RESPIRACION_MS - transcurrido + 999) / 1000).coerceAtLeast(0)} s"
                 } else {
                     // El pulso se mide sin límite: la barra muestra cuánto falta para el primer análisis.
                     pbBiometricProgress.progress = ((transcurrido * 100) / PRIMER_ANALISIS_PULSO_MS).toInt().coerceIn(0, 100)
+                    pbRobot.progress = pbBiometricProgress.progress
                     tvCuenta.text = "${transcurrido / 1000} s"
                 }
                 actualizarCalidad()
@@ -1588,6 +1682,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         isBiometricMeasuring = false
         biometricProgressRunnable?.let { handler.removeCallbacks(it) }
         pbBiometricProgress.visibility = View.GONE
+        pbRobot.visibility = View.INVISIBLE
+        mostrarOndaVital(false)
         // Volver a la frecuencia normal para ahorrar batería.
         accelSensor?.let {
             sensorManager.unregisterListener(this, it)
@@ -1601,11 +1697,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         cuentaRunnable = null
         layoutMonitor.visibility = View.GONE
         mostrarInstrucciones(true)
+        actualizarGuiaRobot()
         actualizarBotonesMedicion()
         reanudarSismos()
         // Al reaparecer las instrucciones, llevar la vista al resultado.
         val caja = if (tipoActual == TipoMedicion.RESPIRACION) cajaResultadoRespiracion else cajaResultadoPulso
-        val scroll = scrollDeSignos()
+        val scroll = scrollSignos
         scroll.post {
             val zona = Rect()
             caja.getDrawingRect(zona)
@@ -1853,6 +1950,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             else -> dz
         }
         graficaVital.agregarPunto(valor)
+        if (modoRobot == ModoRobot.HERRAMIENTA) {
+            picoOndaVital = maxOf(picoOndaVital * 0.997f, abs(valor))
+            sismografoRobot.rango = maxOf(0.01f, picoOndaVital * 1.25f)
+            sismografoRobot.agregarPunto(valor)
+        }
+    }
+
+    /** En primeros auxilios, el movimiento del pecho pasa por detrás de la cara mientras se mide. */
+    private fun mostrarOndaVital(visible: Boolean) {
+        if (!::sismografoRobot.isInitialized) return
+        if (visible && modoRobot == ModoRobot.HERRAMIENTA) {
+            sismografoRobot.limpiar()
+            picoOndaVital = 0f
+            sismografoRobot.setStrokeColor(if (tipoActual == TipoMedicion.RESPIRACION) "#38BDF8" else "#F43F5E")
+            // Se desvanece antes de llegar a la guía y al resultado de los costados.
+            sismografoRobot.bordeDesvanecido = 0.27f
+            sismografoRobot.visibility = View.VISIBLE
+        } else if (modoRobot != ModoRobot.ESTACION) {
+            sismografoRobot.visibility = View.GONE
+        }
     }
 
     private fun actualizarCalidad() {
@@ -1879,6 +1996,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun ponerCalidad(icono: Int, texto: String, color: String) {
+        if (modoRobot == ModoRobot.HERRAMIENTA && ::tvGuiaRobot.isInitialized) tvGuiaRobot.text = texto
         val c = Color.parseColor(color)
         tvCalidad.text = texto
         tvCalidad.setTextColor(c)
@@ -2005,6 +2123,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     /** Muestra "15 RPM" con el número grande y la unidad más pequeña. */
     private fun mostrarValor(valor: TextView, estado: TextView, texto: String, textoEstado: String, color: String) {
+        val tipo = if (valor == tvRpmValues) TipoMedicion.RESPIRACION else TipoMedicion.PULSO
+        valoresRobot[tipo] = Triple(texto, textoEstado, color)
+        if (tipo == panelSignos) mostrarResultadoRobot()
         val c = Color.parseColor(color)
         val conUnidad = SpannableString(texto)
         val corte = texto.lastIndexOf(' ')
@@ -2191,7 +2312,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         when (evento) {
             DetectorRetiro.Evento.RETIRADO -> if (modoRobot == ModoRobot.ESTACION) {
-                entrarModoHerramienta("Me sacaste de la estación. Modo primeros auxilios: elige respiración o pulso.")
+                entrarModoHerramienta("Ya estoy fuera de la estación. Elige respiración o pulso y te guío paso a paso.")
             }
             DetectorRetiro.Evento.COLOCADO -> if (modoRobot == ModoRobot.HERRAMIENTA && !medicionActiva) {
                 entrarModoEstacion()

@@ -4,6 +4,9 @@
         <item name="android:windowBackground">@color/fondo</item>
         <item name="android:statusBarColor">@color/fondo</item>
         <item name="android:navigationBarColor">#0B1020</item>
+        <!-- Tipografía de toda la app -->
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="fontFamily">@font/manrope</item>
     </style>
 
     <style name="Theme.DetectorMovimiento" parent="Base.Theme.DetectorMovimiento" />

@@ -9,6 +9,7 @@ import android.graphics.RectF
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.View
+import androidx.core.content.res.ResourcesCompat
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sin
@@ -43,7 +44,9 @@ class CaraRobotView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
-    private val texto = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFakeBoldText = true }
+    private val texto = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = ResourcesCompat.getFont(context, R.font.manrope_semibold)
+    }
     private val rect = RectF()
     private val path = Path()
 
@@ -74,17 +77,19 @@ class CaraRobotView @JvmOverloads constructor(
         brillo.alpha = 40
 
         actualizarMirada(ahora)
-        // Ojos y boca forman un bloque centrado en la vista, con margen para el brillo.
-        val escala = min(w * 0.9f, h * 1.75f)
+        // Ojos y boca forman un bloque fijo en el centro de la pantalla; al mirar a los lados
+        // solo se mueven los ojos, no la cara.
+        val escala = escala(w, h)
         val anchoOjo = escala * 0.17f
         val altoOjo = escala * 0.26f
         val separacion = escala * 0.2f
-        val cx = w / 2f + mirada * escala * 0.06f
-        val cyOjos = h / 2f - altoOjo * 0.32f
+        val cx = w / 2f
+        val cxOjos = cx + mirada * escala * 0.035f
+        val cyOjos = centroY(h) - altoOjo * 0.37f
 
         // Ojos
         for (lado in listOf(-1f, 1f)) {
-            val ox = cx + lado * separacion
+            val ox = cxOjos + lado * separacion
             when (expresion) {
                 Expresion.DORMIDO -> {
                     // Ojos cerrados: un arco suave hacia abajo
@@ -170,6 +175,21 @@ class CaraRobotView @JvmOverloads constructor(
         if (isShown) postInvalidateDelayed(33L)
     }
 
+    private fun escala(w: Float, h: Float) = min(w * 0.9f, h * 1.2f)
+
+    /** Centro vertical de la cara: un poco arriba del centro, para dejar lugar a los subtítulos. */
+    private fun centroY(h: Float) = h * 0.44f
+
+    /** Borde izquierdo y derecho de la cara (con su brillo), en píxeles de esta vista. */
+    fun limitesHorizontales(): Pair<Float, Float> {
+        val e = escala(width.toFloat(), height.toFloat())
+        val medio = e * 0.2f + e * 0.17f * 0.75f
+        return Pair(width / 2f - medio, width / 2f + medio)
+    }
+
+    /** Altura de la cara en esta vista (para que la señal de fondo pase por en medio). */
+    fun centroVertical(): Float = centroY(height.toFloat())
+
     /** 1 = ojo abierto; baja hasta casi 0 durante un parpadeo de 140 ms cada 3–6 s. */
     private fun factorParpadeo(ahora: Long): Float {
         if (proximoParpadeoMs == 0L) proximoParpadeoMs = ahora + 2_000L
@@ -186,7 +206,7 @@ class CaraRobotView @JvmOverloads constructor(
 
     private fun actualizarMirada(ahora: Long) {
         miradaObjetivo = when (expresion) {
-            Expresion.ATENTO -> 0.35f
+            Expresion.ATENTO -> 0.8f
             Expresion.DESPIERTO -> {
                 if (ahora >= proximaMiradaMs) {
                     proximaMiradaMs = ahora + 2_500L + (Math.random() * 3_000).toLong()

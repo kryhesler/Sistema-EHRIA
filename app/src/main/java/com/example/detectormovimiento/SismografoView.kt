@@ -3,8 +3,10 @@ package com.example.detectormovimiento
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.View
 
@@ -47,6 +49,29 @@ class SismografoView @JvmOverloads constructor(
         linePaint.strokeWidth = dp * resources.displayMetrics.density
     }
 
+    /**
+     * Para la cara del robot: la línea pasa por detrás de la cara y se desvanece un poco al
+     * cruzarla. Devuelve los bordes izquierdo y derecho de la cara, en píxeles.
+     */
+    var zonaDesvanecida: (() -> Pair<Float, Float>)? = null
+
+    /** Altura (en píxeles) por donde pasa la línea; null = el centro de la vista. */
+    var centroLinea: (() -> Float)? = null
+
+    /** Fracción del ancho en la que la línea aparece y desaparece en cada borde. */
+    var bordeDesvanecido = 0.1f
+        set(valor) {
+            field = valor
+            claveDegradado = ""
+            invalidate()
+        }
+
+    /** Altura máxima de la onda en píxeles; null = toda la vista. */
+    var alturaOnda: Float? = null
+
+    private var colorLinea = linePaint.color
+    private var claveDegradado = ""
+
     fun limpiar() {
         headIndex = 0
         totalPuntosCount = 0
@@ -63,7 +88,8 @@ class SismografoView @JvmOverloads constructor(
     }
 
     fun setStrokeColor(hexColor: String) {
-        linePaint.color = Color.parseColor(hexColor)
+        colorLinea = Color.parseColor(hexColor)
+        linePaint.color = colorLinea
         invalidate()
     }
 
@@ -72,7 +98,9 @@ class SismografoView @JvmOverloads constructor(
 
         val width = width.toFloat()
         val height = height.toFloat()
-        val centerY = height / 2f
+        val centerY = centroLinea?.invoke() ?: (height / 2f)
+        val mitadOnda = ((alturaOnda ?: height) / 2f).coerceAtMost(minOf(centerY, height - centerY))
+        aplicarDesvanecido(width)
 
         // Cuadrícula tipo papel milimetrado
         if (cuadricula) dibujarCuadricula(canvas, width, height)
@@ -82,13 +110,13 @@ class SismografoView @JvmOverloads constructor(
         path.reset()
         val stepX = width / (maxPoints - 1)
         val startIndex = if (totalPuntosCount < maxPoints) 0 else headIndex
-        val scaleY = (height / 2f - 20f) / rango
+        val scaleY = (mitadOnda - 20f).coerceAtLeast(1f) / rango
 
         for (i in 0 until totalPuntosCount) {
             val index = (startIndex + i) % maxPoints
             val value = puntos[index]
             val px = i * stepX
-            val py = centerY - (value * scaleY).coerceIn(-height / 2f + 10f, height / 2f - 10f)
+            val py = centerY - (value * scaleY).coerceIn(-mitadOnda + 10f, mitadOnda - 10f)
 
             if (i == 0) {
                 path.moveTo(px, py)
@@ -98,6 +126,37 @@ class SismografoView @JvmOverloads constructor(
         }
 
         canvas.drawPath(path, linePaint)
+    }
+
+    /** Degradado horizontal: aparece en los bordes y se atenúa detrás de la cara. */
+    private fun aplicarDesvanecido(width: Float) {
+        val zona = zonaDesvanecida?.invoke()
+        if (zona == null || width <= 0f) {
+            if (linePaint.shader != null) linePaint.shader = null
+            return
+        }
+        val (izq, der) = zona
+        val clave = "$width|$izq|$der|$colorLinea"
+        if (clave == claveDegradado) return
+        claveDegradado = clave
+        val transicion = width * 0.07f
+        fun f(x: Float) = (x / width).coerceIn(0f, 1f)
+        fun alfa(a: Float) = (colorLinea and 0x00FFFFFF) or ((a * 255).toInt() shl 24)
+        val bordes = bordeDesvanecido.coerceIn(0f, 0.45f)
+        // Invisible en los extremos, aparece de a poco hasta [bordes] y se atenúa tras la cara.
+        val posiciones = floatArrayOf(
+            0f, bordes * 0.7f, bordes,
+            f(izq - transicion), f(izq), f(der), f(der + transicion),
+            1f - bordes, 1f - bordes * 0.7f, 1f,
+        )
+        // Las posiciones deben ir en orden creciente.
+        for (i in 1 until posiciones.size) posiciones[i] = maxOf(posiciones[i], posiciones[i - 1])
+        val colores = intArrayOf(
+            alfa(0f), alfa(0f), alfa(1f),
+            alfa(1f), alfa(TENUE_DETRAS_DE_LA_CARA), alfa(TENUE_DETRAS_DE_LA_CARA), alfa(1f),
+            alfa(1f), alfa(0f), alfa(0f),
+        )
+        linePaint.shader = LinearGradient(0f, 0f, width, 0f, colores, posiciones, Shader.TileMode.CLAMP)
     }
 
     private fun dibujarCuadricula(canvas: Canvas, width: Float, height: Float) {
@@ -112,5 +171,10 @@ class SismografoView @JvmOverloads constructor(
             canvas.drawLine(0f, y, width, y, gridPaint)
             y += gridSpacing
         }
+    }
+
+    private companion object {
+        /** Opacidad de la línea mientras pasa por detrás de la cara. */
+        const val TENUE_DETRAS_DE_LA_CARA = 0.28f
     }
 }
