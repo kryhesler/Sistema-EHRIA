@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ilustración de EHRIA: respiración en hombres, teléfono sobre el abdomen (a la altura del ombligo). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp" android:height="169dp"
+    android:viewportWidth="320" android:viewportHeight="270">
+    <path android:fillColor="#16243A" android:pathData="M26,6 H294 A18,18 0 0 1 312,24 V246 A18,18 0 0 1 294,264 H26 A18,18 0 0 1 8,246 V24 A18,18 0 0 1 26,6 Z" />
+    <path android:fillColor="#7C8BA1" android:pathData="M101,92 C88,98 80,120 79,148 C78,176 80,202 82,224 L97,224 C97,202 99,178 101,152 C103,130 106,114 110,102 Z" />
+    <path android:fillColor="#7C8BA1" android:pathData="M 219,92 C 232,98 240,120 241,148 C 242,176 240,202 238,224 L 223,224 C 223,202 221,178 219,152 C 217,130 214,114 210,102 Z" />
+    <path android:fillColor="#7C8BA1" android:pathData="M81,234 A8,12 0 1 0 97,234 A8,12 0 1 0 81,234 Z" />
+    <path android:fillColor="#7C8BA1" android:pathData="M223,234 A8,12 0 1 0 239,234 A8,12 0 1 0 223,234 Z" />
+    <path android:fillColor="#7C8BA1" android:pathData="M149,58 L171,58 L174,80 C166,84 154,84 146,80 Z" />
+    <path android:fillColor="#7C8BA1" android:pathData="M148,70 C138,78 118,80 104,86 C95,90 93,102 98,114 L104,124 C106,150 110,172 113,194 C111,212 107,230 105,262 L215,262 C213,230 209,212 207,194 C210,172 214,150 216,124 L222,114 C227,102 225,90 216,86 C202,80 182,78 172,70 Z" />
+    <path android:fillColor="#94A3B8" android:pathData="M139,38 A21,26 0 1 0 181,38 A21,26 0 1 0 139,38 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#94A3B8" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M40,120 V144 M40,120 H45 A12,12 0 0 1 45,144 H40" />
+    <path android:fillColor="#00000000" android:strokeColor="#94A3B8" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M282,120 V144" />
+    <path android:fillColor="#000000" android:fillAlpha="0.35" android:pathData="M153,166 H171 A6,6 0 0 1 177,172 V214 A6,6 0 0 1 171,220 H153 A6,6 0 0 1 147,214 V172 A6,6 0 0 1 153,166 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#38BDF8" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.45" android:pathData="M138,157 A26,26 0 0 1 182,157" />
+    <path android:fillColor="#00000000" android:strokeColor="#38BDF8" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.8" android:pathData="M148,160 A14,14 0 0 1 172,160" />
+    <path android:fillColor="#1F2937" android:pathData="M151,163 H169 A6,6 0 0 1 175,169 V211 A6,6 0 0 1 169,217 H151 A6,6 0 0 1 145,211 V169 A6,6 0 0 1 151,163 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#94A3B8" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M151,163 H169 A6,6 0 0 1 175,169 V211 A6,6 0 0 1 169,217 H151 A6,6 0 0 1 145,211 V169 A6,6 0 0 1 151,163 Z" />
+    <path android:fillColor="#0B1220" android:pathData="M150.5,168 H169.5 A3,3 0 0 1 172.5,171 V209 A3,3 0 0 1 169.5,212 H150.5 A3,3 0 0 1 147.5,209 V171 A3,3 0 0 1 150.5,168 Z" />
+    <path android:fillColor="#64748B" android:pathData="M158.8,165.6 A1.2,1.2 0 1 0 161.2,165.6 A1.2,1.2 0 1 0 158.8,165.6 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#00E676" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M150,190 L154,190 L157,183 L161,198 L164,187 L166,190 L170,190" />
+</vector>

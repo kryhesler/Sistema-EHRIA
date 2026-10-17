@@ -33,6 +33,8 @@ class DetectorSismico(
         val pgaPico: Float,
         val umbral: Float,
         val segundosEvaluados: Int,
+        /** Desde que empezó el movimiento hasta la última vez que superó el umbral. */
+        val duracionMovimientoS: Int,
         /** true solo en la muestra en que la alerta empieza o sube de nivel. */
         val alertaNueva: Boolean,
     )
@@ -118,11 +120,11 @@ class DetectorSismico(
             }
         }
 
-        val segundos = if (fase == Fase.EVALUANDO || fase == Fase.ALERTA) {
-            ((ahoraMs - inicioEventoMs) / 1000L).toInt()
-        } else 0
+        val enEvento = fase == Fase.EVALUANDO || fase == Fase.ALERTA
+        val segundos = if (enEvento) ((ahoraMs - inicioEventoMs) / 1000L).toInt() else 0
+        val duracionMovimiento = if (enEvento) ((ultimoSobreUmbralMs - inicioEventoMs) / 1000L).toInt() else 0
 
-        return Estado(fase, nivel, pgaFiltrado, pgaPico, umbral, segundos, alertaNueva)
+        return Estado(fase, nivel, pgaFiltrado, pgaPico, umbral, segundos, duracionMovimiento, alertaNueva)
     }
 
     /** Botón "restablecer": vuelve a vigilancia normal sin perder la calibración. */

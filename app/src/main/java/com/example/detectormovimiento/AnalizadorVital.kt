@@ -44,17 +44,27 @@ object AnalizadorVital {
     private const val FRECUENCIA_BASE_MAX_HZ = 100
     private const val FRECUENCIA_MIN_PULSO_HZ = 40
     private const val DESCARTE_INICIAL_S = 1.0
+    private const val SALTO_MAXIMO_NS = 500_000_000L
 
     private const val MOVIMIENTO_EXCESIVO = 1.0      // m/s², desviación estándar de un eje
     private const val AMPLITUD_MIN_RESPIRACION = 0.004 // m/s², por debajo: mesa / objeto sólido
     private const val CORRELACION_MIN = 0.4
 
-    fun analizar(tiemposNs: LongArray, x: FloatArray, y: FloatArray, z: FloatArray): Resultado {
-        val n = tiemposNs.size
-        require(x.size == n && y.size == n && z.size == n) { "Los ejes deben tener el mismo tamaño" }
+    /**
+     * Nunca lanza excepciones: con datos dañados del sensor devuelve MUESTRA_INSUFICIENTE.
+     */
+    fun analizar(tiemposNs: LongArray, x: FloatArray, y: FloatArray, z: FloatArray): Resultado = try {
+        analizarSinProteger(tiemposNs, x, y, z)
+    } catch (_: Exception) {
+        Resultado(EstadoMedicion.MUESTRA_INSUFICIENTE, null, null, 0.0)
+    }
+
+    private fun analizarSinProteger(tiemposNs: LongArray, x: FloatArray, y: FloatArray, z: FloatArray): Resultado {
+        val muestras = limpiarMuestras(tiemposNs, x, y, z)
+        val n = muestras.t.size
 
         if (n < 50) return Resultado(EstadoMedicion.MUESTRA_INSUFICIENTE, null, null, 0.0)
-        val t = DoubleArray(n) { (tiemposNs[it] - tiemposNs[0]) / 1e9 }
+        val t = muestras.t
         val duracion = t[n - 1]
         if (duracion < DURACION_MINIMA_S) {
             return Resultado(EstadoMedicion.MUESTRA_INSUFICIENTE, null, null, 0.0)
@@ -64,7 +74,7 @@ object AnalizadorVital {
         val fs = min(fsMedida.roundToInt(), FRECUENCIA_BASE_MAX_HZ)
         if (fs < 5) return Resultado(EstadoMedicion.MUESTRA_INSUFICIENTE, null, null, fsMedida)
 
-        val ejes = listOf(x, y, z).map { quitarMedia(remuestrear(t, it, fs.toDouble())) }
+        val ejes = listOf(muestras.x, muestras.y, muestras.z).map { quitarMedia(remuestrear(t, it, fs.toDouble())) }
 
         if (ejes.any { desviacion(it) > MOVIMIENTO_EXCESIVO }) {
             return Resultado(EstadoMedicion.MUCHO_MOVIMIENTO, null, null, fsMedida)
@@ -88,7 +98,7 @@ object AnalizadorVital {
         val picoResp = picoAutocorrelacion(respiracion, fsResp, 2.0, 10.0)
         val rpm = picoResp
             ?.takeIf { it.second >= CORRELACION_MIN }
-            ?.let { (60.0 / it.first).roundToInt() }
+            ?.let { porMinuto(it.first) }
 
         // ---------- Pulso ----------
         val bpm = if (fs >= FRECUENCIA_MIN_PULSO_HZ) estimarPulso(ejes[2], fs.toDouble()) else null
@@ -112,7 +122,56 @@ object AnalizadorVital {
         // 40 a 150 latidos por minuto
         val pico = picoAutocorrelacion(energia, fs, 0.4, 1.5) ?: return null
         if (pico.second < CORRELACION_MIN) return null
-        return (60.0 / pico.first).roundToInt()
+        return porMinuto(pico.first)
+    }
+
+    /** Convierte un periodo en segundos a "por minuto"; null si el número no es válido. */
+    private fun porMinuto(periodoS: Double): Int? {
+        val valor = 60.0 / periodoS
+        return if (valor.isFinite() && valor > 0) valor.roundToInt() else null
+    }
+
+    private class Muestras(val t: DoubleArray, val x: FloatArray, val y: FloatArray, val z: FloatArray)
+
+    /**
+     * Los teléfonos reales a veces entregan muestras repetidas, desordenadas (al reiniciar el
+     * sensor llegan eventos viejos en lote) o con valores NaN. Se ordenan por tiempo y se
+     * descartan las inválidas. Los tiempos quedan en segundos desde la primera muestra.
+     */
+    private fun limpiarMuestras(tiemposNs: LongArray, x: FloatArray, y: FloatArray, z: FloatArray): Muestras {
+        val n = minOf(tiemposNs.size, x.size, y.size, z.size)
+        val orden = (0 until n)
+            .filter { x[it].isFinite() && y[it].isFinite() && z[it].isFinite() }
+            .sortedBy { tiemposNs[it] }
+        val crecientes = ArrayList<Int>(orden.size)
+        for (i in orden) {
+            if (crecientes.isEmpty() || tiemposNs[i] > tiemposNs[crecientes.last()]) crecientes.add(i)
+        }
+        // Si hay un salto de tiempo grande (p. ej. un evento viejo al inicio), quedarse con
+        // el tramo continuo más largo.
+        var mejorInicio = 0
+        var mejorFin = 0
+        var inicio = 0
+        for (k in 1..crecientes.size) {
+            val corte = k == crecientes.size ||
+                tiemposNs[crecientes[k]] - tiemposNs[crecientes[k - 1]] > SALTO_MAXIMO_NS
+            if (corte) {
+                if (k - inicio > mejorFin - mejorInicio) {
+                    mejorInicio = inicio
+                    mejorFin = k
+                }
+                inicio = k
+            }
+        }
+        val validos = crecientes.subList(mejorInicio, mejorFin)
+        if (validos.isEmpty()) return Muestras(DoubleArray(0), FloatArray(0), FloatArray(0), FloatArray(0))
+        val t0 = tiemposNs[validos[0]]
+        return Muestras(
+            DoubleArray(validos.size) { (tiemposNs[validos[it]] - t0) / 1e9 },
+            FloatArray(validos.size) { x[validos[it]] },
+            FloatArray(validos.size) { y[validos[it]] },
+            FloatArray(validos.size) { z[validos[it]] },
+        )
     }
 
     /**
@@ -144,12 +203,15 @@ object AnalizadorVital {
 
         val maximosLocales = (kMin..kMax).filter { r[it] >= r[it - 1] && r[it] >= r[it + 1] }
         val mayor = maximosLocales.maxOfOrNull { r[it] } ?: return null
-        val k = maximosLocales.first { r[it] >= 0.85 * mayor }
+        // Con señales reales y ruidosas todos los máximos pueden ser negativos: no hay ritmo.
+        // (Antes este caso hacía fallar el `first` y cerraba la app al terminar de medir.)
+        if (!mayor.isFinite() || mayor <= 0.0) return null
+        val k = maximosLocales.firstOrNull { r[it] >= 0.85 * mayor } ?: return null
 
         val denominador = r[k - 1] - 2 * r[k] + r[k + 1]
-        val delta = if (denominador != 0.0) {
-            (0.5 * (r[k - 1] - r[k + 1]) / denominador).coerceIn(-0.5, 0.5)
-        } else 0.0
+        val ajuste = 0.5 * (r[k - 1] - r[k + 1]) / denominador
+        val delta = if (denominador != 0.0 && ajuste.isFinite()) ajuste.coerceIn(-0.5, 0.5) else 0.0
+        if (!r[k].isFinite()) return null
         return Pair((k + delta) / fs, r[k])
     }
 

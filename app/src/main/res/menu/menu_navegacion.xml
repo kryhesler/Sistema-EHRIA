@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_sismos"
+        android:icon="@drawable/ic_nav_sismo"
+        android:title="Sismos" />
+    <item
+        android:id="@+id/nav_signos"
+        android:icon="@drawable/ic_corazon"
+        android:title="Signos vitales" />
+    <item
+        android:id="@+id/nav_historial"
+        android:icon="@drawable/ic_nav_historial"
+        android:title="Historial" />
+</menu>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Raíz de los estilos de la app (los nombres con punto heredan de aquí). -->
+    <style name="Ehria" />
+
+    <!-- Botón principal: acción de la pantalla (medir, restablecer). -->
+    <style name="Ehria.Boton" parent="Widget.Material3.Button">
+        <item name="android:minHeight">54dp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="cornerRadius">16dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">10dp</item>
+        <item name="iconTint">@color/white</item>
+        <item name="iconSize">20dp</item>
+    </style>
+
+    <!-- Botón secundario con borde (cancelar, borrar). -->
+    <style name="Ehria.Boton.Secundario" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">50dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/texto_secundario</item>
+        <item name="cornerRadius">16dp</item>
+        <item name="strokeColor">@color/borde</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">8dp</item>
+        <item name="iconTint">@color/texto_secundario</item>
+        <item name="iconSize">18dp</item>
+    </style>
+
+    <!-- Opción de un selector segmentado (respiración/pulso, hombre/mujer). -->
+    <style name="Ehria.Boton.Segmento" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">48dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/toggle_texto</item>
+        <item name="backgroundTint">@color/toggle_fondo</item>
+        <item name="strokeColor">@color/borde</item>
+        <item name="cornerRadius">14dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">8dp</item>
+        <item name="iconTint">@color/toggle_texto</item>
+        <item name="iconSize">18dp</item>
+    </style>
+
+    <!-- Título de sección con ícono a la izquierda. -->
+    <style name="Ehria.Etiqueta">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textColor">@color/texto_tenue</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:drawableTint">@color/texto_tenue</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <style name="Ehria.Tarjeta">
+        <item name="android:background">@drawable/fondo_tarjeta</item>
+        <item name="android:padding">18dp</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="Ehria.IndicadorNav" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/indicador_nav</item>
+    </style>
+</resources>

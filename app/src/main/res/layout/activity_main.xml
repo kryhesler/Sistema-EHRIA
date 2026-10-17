@@ -5,402 +5,667 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:fitsSystemWindows="true"
-    android:keepScreenOn="true"
-    android:paddingTop="32dp"
-    android:background="#121824">
+    android:keepScreenOn="true">
 
-    <!-- Header App -->
+    <!-- Encabezado: el estado sísmico se ve desde cualquier pestaña -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:gravity="center">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="10dp">
+
+        <ImageView
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/fondo_logo"
+            android:padding="7dp"
+            android:src="@drawable/ic_nav_sismo"
+            android:importantForAccessibility="no"
+            app:tint="@color/white" />
 
         <TextView
             android:id="@+id/tvAppHeader"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
+            android:text="SismoMonitor &amp; VitalSens"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="@color/texto" />
+
+        <LinearLayout
+            android:id="@+id/chipEstado"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🌋 SismoMonitor &amp; VitalSens PRO"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="#F8FAFC" />
-
-        <!-- Tab Selector Buttons -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="12dp"
-            android:weightSum="2">
+            android:gravity="center_vertical"
+            android:background="@drawable/fondo_chip"
+            android:backgroundTint="#2638BDF8"
+            android:paddingStart="10dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp">
 
-            <Button
-                android:id="@+id/btnTabSeismic"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="🌋 Sismología (10s)"
-                android:textSize="12sp"
-                android:backgroundTint="#2563EB"
-                android:textColor="#FFFFFF"
-                android:layout_marginEnd="4dp" />
+            <ImageView
+                android:id="@+id/ivEstadoGlobal"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_calibrar"
+                android:importantForAccessibility="no"
+                app:tint="#38BDF8" />
 
-            <Button
-                android:id="@+id/btnTabBiometric"
-                android:layout_width="0dp"
+            <TextView
+                android:id="@+id/tvEstadoGlobal"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="🩺 Signos Vitales"
+                android:layout_marginStart="6dp"
+                android:text="Calibrando"
                 android:textSize="12sp"
-                android:backgroundTint="#334155"
-                android:textColor="#94A3B8"
-                android:layout_marginStart="4dp" />
+                android:textStyle="bold"
+                android:textColor="#38BDF8" />
         </LinearLayout>
     </LinearLayout>
 
-    <ScrollView
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fillViewport="true">
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-        <LinearLayout
+        <!-- ================= PESTAÑA 1: SISMOS ================= -->
+        <ScrollView
+            android:id="@+id/scrollSismos"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:layout_height="match_parent"
+            android:fillViewport="true">
 
-            <!-- ================= APARTADO 1: SISMOLOGÍA ================= -->
             <LinearLayout
                 android:id="@+id/layoutSeismicSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:visibility="visible">
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="16dp">
 
-                <!-- Card Status & 10s Evaluation -->
-                <androidx.cardview.widget.CardView
+                <!-- Estado y evaluación de 10 s -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="#1E293B"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="4dp"
-                    android:layout_marginBottom="16dp">
+                    android:gravity="center_horizontal"
+                    android:paddingTop="24dp"
+                    android:paddingBottom="22dp"
+                    android:layout_marginBottom="14dp">
 
-                    <LinearLayout
+                    <FrameLayout
+                        android:id="@+id/circuloEstado"
+                        android:layout_width="76dp"
+                        android:layout_height="76dp"
+                        android:background="@drawable/fondo_circulo"
+                        android:backgroundTint="#2638BDF8">
+
+                        <ImageView
+                            android:id="@+id/ivEstadoSismo"
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_calibrar"
+                            android:importantForAccessibility="no"
+                            app:tint="#38BDF8" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/tvStatusBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="CALIBRANDO SENSOR"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1"
+                        android:textColor="#38BDF8"
+                        android:gravity="center" />
+
+                    <TextView
+                        android:id="@+id/tvNivelMovimiento"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Deja el teléfono quieto unos segundos"
+                        android:textSize="21sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/texto"
+                        android:gravity="center" />
+
+                    <TextView
+                        android:id="@+id/tvAceleracionPico"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Aceleración actual: 0.00 m/s²"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:textColor="#38BDF8" />
+
+                    <TextView
+                        android:id="@+id/tvQuake30sTimer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Midiendo el ruido propio del sensor de este teléfono."
+                        android:textSize="13sp"
+                        android:textColor="@color/texto_tenue"
+                        android:gravity="center" />
+
+                    <Button
+                        android:id="@+id/btnRestablecer"
+                        style="@style/Ehria.Boton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="20dp"
-                        android:gravity="center_horizontal">
+                        android:layout_marginTop="16dp"
+                        android:text="Silenciar y restablecer"
+                        android:backgroundTint="#334155"
+                        android:visibility="gone"
+                        app:icon="@drawable/ic_silenciar" />
+                </LinearLayout>
 
-                        <TextView
-                            android:id="@+id/tvStatusBadge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="● SISTEMA NORMAL"
-                            android:textSize="13sp"
-                            android:textStyle="bold"
-                            android:textColor="#00E676"
-                            android:paddingStart="12dp"
-                            android:paddingTop="6dp"
-                            android:paddingEnd="12dp"
-                            android:paddingBottom="6dp"
-                            android:background="#1500E676" />
-
-                        <TextView
-                            android:id="@+id/tvNivelMovimiento"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Sin Actividad Sísmica Sostenida"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:textColor="#F8FAFC"
-                            android:gravity="center"
-                            android:layout_marginTop="12dp" />
-
-                        <TextView
-                            android:id="@+id/tvAceleracionPico"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="PGA Inmediato: 0.00 m/s²"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="#00E676"
-                            android:layout_marginTop="6dp" />
-
-                        <TextView
-                            android:id="@+id/tvQuake30sTimer"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="⏳ Esperando detección de movimiento sostenido por 10s..."
-                            android:textSize="12sp"
-                            android:textColor="#38BDF8"
-                            android:gravity="center"
-                            android:layout_marginTop="10dp" />
-
-                        <Button
-                            android:id="@+id/btnRestablecer"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:text="🔕 Silenciar y restablecer"
-                            android:textSize="13sp"
-                            android:backgroundTint="#475569"
-                            android:textColor="#FFFFFF"
-                            android:visibility="gone" />
-
-                    </LinearLayout>
-                </androidx.cardview.widget.CardView>
-
-                <!-- Seismograph Chart -->
-                <androidx.cardview.widget.CardView
+                <!-- Sismograma -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="#1E293B"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="4dp"
-                    android:layout_marginBottom="16dp">
+                    android:layout_marginBottom="14dp">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
+                        android:layout_marginBottom="12dp"
+                        android:text="SISMOGRAMA EN TIEMPO REAL"
+                        android:drawableStart="@drawable/ic_grafica" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="📈 SISMOGRAMA EN TIEMPO REAL"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            android:textColor="#94A3B8"
-                            android:layout_marginBottom="10dp" />
-
-                        <com.example.detectormovimiento.SismografoView
-                            android:id="@+id/sismografoView"
-                            android:layout_width="match_parent"
-                            android:layout_height="220dp" />
-
-                    </LinearLayout>
-                </androidx.cardview.widget.CardView>
+                    <com.example.detectormovimiento.SismografoView
+                        android:id="@+id/sismografoView"
+                        android:layout_width="match_parent"
+                        android:layout_height="190dp" />
+                </LinearLayout>
 
                 <!-- Escala Mercalli -->
-                <androidx.cardview.widget.CardView
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="#1E293B"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="4dp"
-                    android:layout_marginBottom="16dp">
+                    android:layout_marginBottom="14dp">
 
-                    <LinearLayout
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="INTENSIDAD ESTIMADA"
+                        android:drawableStart="@drawable/ic_barras" />
+
+                    <TextView
+                        android:id="@+id/tvMercalliDetalle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
+                        android:text="Intensidad: I - Imperceptible. Sistema iniciando."
+                        android:textSize="14sp"
+                        android:textColor="@color/texto_secundario"
+                        android:lineSpacingExtra="3dp" />
+                </LinearLayout>
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="📊 INTENSIDAD ESTIMADA (MOVIMIENTO SOSTENIDO 10S)"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            android:textColor="#94A3B8"
-                            android:layout_marginBottom="8dp" />
+                <!-- Dónde colocar la estación -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
 
-                        <TextView
-                            android:id="@+id/tvMercalliDetalle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="Intensidad: I - Imperceptible. Sistema monitoreando."
-                            android:textSize="13sp"
-                            android:textColor="#CBD5E1"
-                            android:lineSpacingExtra="2dp" />
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:text="DÓNDE COLOCAR LA ESTACIÓN"
+                        android:drawableStart="@drawable/ic_ubicacion" />
 
-                    </LinearLayout>
-                </androidx.cardview.widget.CardView>
+                    <ImageView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:adjustViewBounds="true"
+                        android:contentDescription="Teléfono atornillado a una columna de concreto, conectado al cargador"
+                        android:src="@drawable/ilustracion_estacion" />
 
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="•  Fijo a una columna o al piso de concreto, nunca suelto sobre una mesa.\n•  Lejos de puertas, máquinas y paso de gente.\n•  Siempre conectado al cargador y con la app abierta."
+                        android:textSize="14sp"
+                        android:textColor="@color/texto_secundario"
+                        android:lineSpacingExtra="4dp" />
+                </LinearLayout>
             </LinearLayout>
+        </ScrollView>
 
+        <!-- ================= PESTAÑA 2: SIGNOS VITALES ================= -->
+        <ScrollView
+            android:id="@+id/scrollSignos"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
 
-            <!-- ================= APARTADO 2: SIGNOS VITALES (RESPIRACIÓN Y RITMO CARDÍACO) ================= -->
             <LinearLayout
                 android:id="@+id/layoutBiometricSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:visibility="gone">
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="16dp">
 
-                <androidx.cardview.widget.CardView
+                <!-- Respiración y pulso se miden por separado -->
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/grupoPanel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="#1E293B"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="4dp"
-                    android:layout_marginBottom="16dp">
+                    android:layout_marginBottom="14dp"
+                    app:singleSelection="true"
+                    app:selectionRequired="true"
+                    app:checkedButton="@id/btnPanelRespiracion">
+
+                    <Button
+                        android:id="@+id/btnPanelRespiracion"
+                        style="@style/Ehria.Boton.Segmento"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Respiración"
+                        app:icon="@drawable/ic_respiracion" />
+
+                    <Button
+                        android:id="@+id/btnPanelPulso"
+                        style="@style/Ehria.Boton.Segmento"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Pulso"
+                        app:icon="@drawable/ic_corazon" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <!-- Panel: respiración -->
+                    <LinearLayout
+                        android:id="@+id/layoutPanelRespiracion"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Ehria.Etiqueta"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:text="FRECUENCIA RESPIRATORIA"
+                            android:drawableStart="@drawable/ic_respiracion" />
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/grupoSexo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@id/btnHombre">
+
+                            <Button
+                                android:id="@+id/btnHombre"
+                                style="@style/Ehria.Boton.Segmento"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Hombre"
+                                app:icon="@drawable/ic_hombre" />
+
+                            <Button
+                                android:id="@+id/btnMujer"
+                                style="@style/Ehria.Boton.Segmento"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Mujer"
+                                app:icon="@drawable/ic_mujer" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <ImageView
+                            android:id="@+id/imgRespiracion"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:adjustViewBounds="true"
+                            android:contentDescription="Dónde colocar el teléfono para medir la respiración"
+                            android:src="@drawable/ilustracion_respiracion_hombre" />
+
+                        <TextView
+                            android:id="@+id/tvInstruccionRespiracion"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:layout_marginBottom="16dp"
+                            android:textSize="14sp"
+                            android:textColor="@color/texto_secundario"
+                            android:lineSpacingExtra="4dp" />
+
+                        <Button
+                            android:id="@+id/btnMedirRespiracion"
+                            style="@style/Ehria.Boton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Medir respiración · 20 s"
+                            android:backgroundTint="#0284C7"
+                            app:icon="@drawable/ic_iniciar" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:paddingTop="14dp"
+                            android:paddingBottom="16dp"
+                            android:background="@drawable/fondo_resultado">
+
+                            <TextView
+                                android:id="@+id/tvRpmEstado"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Sin medición"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto_tenue"
+                                android:gravity="center" />
+
+                            <TextView
+                                android:id="@+id/tvRpmValues"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="-- RPM"
+                                android:textSize="44sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto_tenue" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Panel: pulso -->
+                    <LinearLayout
+                        android:id="@+id/layoutPanelPulso"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/Ehria.Etiqueta"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:text="FRECUENCIA CARDÍACA"
+                            android:drawableStart="@drawable/ic_corazon" />
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:adjustViewBounds="true"
+                            android:contentDescription="Teléfono plano sobre el lado izquierdo del pecho, sobre el corazón"
+                            android:src="@drawable/ilustracion_pulso" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:layout_marginBottom="16dp"
+                            android:text="Igual para hombres y mujeres.\n1. Recuéstate boca arriba.\n2. Pon el teléfono plano, con la pantalla hacia arriba, sobre el lado IZQUIERDO del pecho (sobre el corazón). En el dibujo, I = izquierda y D = derecha de la persona.\n3. No hables ni te muevas hasta que termine."
+                            android:textSize="14sp"
+                            android:textColor="@color/texto_secundario"
+                            android:lineSpacingExtra="4dp" />
+
+                        <Button
+                            android:id="@+id/btnMedirPulso"
+                            style="@style/Ehria.Boton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Medir pulso · 15 s"
+                            android:backgroundTint="#BE123C"
+                            app:icon="@drawable/ic_iniciar" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:paddingTop="14dp"
+                            android:paddingBottom="16dp"
+                            android:background="@drawable/fondo_resultado">
+
+                            <TextView
+                                android:id="@+id/tvBpmEstado"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Sin medición"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto_tenue"
+                                android:gravity="center" />
+
+                            <TextView
+                                android:id="@+id/tvBpmValues"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="-- BPM"
+                                android:textSize="44sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto_tenue" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Común: progreso, estado y cancelar -->
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/pbBiometricProgress"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:max="100"
+                        android:visibility="gone"
+                        app:trackThickness="6dp"
+                        app:trackCornerRadius="3dp"
+                        app:trackColor="#243049"
+                        app:indicatorColor="#38BDF8" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="20dp"
-                        android:gravity="center_horizontal">
+                        android:layout_marginTop="14dp"
+                        android:orientation="horizontal"
+                        android:gravity="center">
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🩺 MEDICIÓN DE SIGNOS VITALES SOBRE EL PECHO"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            android:textColor="#38BDF8"
-                            android:layout_marginBottom="8dp" />
-
-                        <TextView
-                            android:id="@+id/tvBiometricInstruction"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Recuéstate boca arriba, coloca el teléfono plano sobre el centro del pecho, quédate quieto y toca 'Calcular'."
-                            android:textSize="12sp"
-                            android:textColor="#94A3B8"
-                            android:gravity="center"
-                            android:layout_marginBottom="16dp" />
-
-                        <Button
-                            android:id="@+id/btnStartBiometric"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="🩺 Tocar para Calcular Pulso y Respiración (20s)"
-                            android:backgroundTint="#0284C7"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp"
-                            android:layout_marginBottom="12dp" />
-
-                        <ProgressBar
-                            android:id="@+id/pbBiometricProgress"
-                            style="?android:attr/progressBarStyleHorizontal"
-                            android:layout_width="match_parent"
-                            android:layout_height="8dp"
-                            android:max="100"
-                            android:progress="0"
-                            android:progressTint="#38BDF8"
-                            android:visibility="gone"
-                            android:layout_marginBottom="12dp" />
+                        <ImageView
+                            android:id="@+id/ivEstadoMedicion"
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_marginEnd="8dp"
+                            android:src="@drawable/ic_info"
+                            android:importantForAccessibility="no"
+                            app:tint="@color/texto_tenue" />
 
                         <TextView
                             android:id="@+id/tvBiometricStatus"
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Estado: Listo para medir"
-                            android:textSize="13sp"
+                            android:text="Listo para medir"
+                            android:textSize="14sp"
                             android:textStyle="bold"
-                            android:textColor="#F8FAFC"
-                            android:gravity="center"
-                            android:layout_marginBottom="16dp" />
+                            android:textColor="@color/texto_secundario" />
+                    </LinearLayout>
 
-                        <!-- Results display -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:weightSum="2"
-                            android:baselineAligned="false">
+                    <Button
+                        android:id="@+id/btnCancelarBiometric"
+                        style="@style/Ehria.Boton.Secundario"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Cancelar medición"
+                        android:visibility="gone"
+                        app:icon="@drawable/ic_cerrar" />
+                </LinearLayout>
 
-                            <!-- Frecuencia Respiratoria -->
-                            <LinearLayout
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:padding="12dp"
-                                android:background="#0F172A">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:text="Mientras se mide, la detección de sismos se pausa. Si el teléfono está sobre una persona pero no se detecta el pulso, la app vuelve a medirlo automáticamente hasta encontrarlo. Valores orientativos: no es un dispositivo médico."
+                    android:textSize="12sp"
+                    android:textColor="#64748B"
+                    android:lineSpacingExtra="2dp"
+                    android:drawableStart="@drawable/ic_info"
+                    android:drawablePadding="10dp"
+                    android:drawableTint="#64748B" />
+            </LinearLayout>
+        </ScrollView>
 
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="🫁 RESPIRACIÓN"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold"
-                                    android:textColor="#38BDF8" />
+        <!-- ================= PESTAÑA 3: HISTORIAL ================= -->
+        <LinearLayout
+            android:id="@+id/layoutHistorial"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="4dp"
+            android:visibility="gone">
 
-                                <TextView
-                                    android:id="@+id/tvRpmEstado"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Sin medición"
-                                    android:textSize="12sp"
-                                    android:textColor="#38BDF8"
-                                    android:gravity="center"
-                                    android:layout_marginTop="4dp" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/grupoHistorial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:selectionRequired="true"
+                app:checkedButton="@id/btnHistSismos">
 
-                                <TextView
-                                    android:id="@+id/tvRpmValues"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="-- RPM"
-                                    android:textSize="28sp"
-                                    android:textStyle="bold"
-                                    android:textColor="#00E676"
-                                    android:layout_marginTop="4dp" />
-                            </LinearLayout>
+                <Button
+                    android:id="@+id/btnHistSismos"
+                    style="@style/Ehria.Boton.Segmento"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sismos"
+                    app:icon="@drawable/ic_nav_sismo" />
 
-                            <!-- Ritmo Cardíaco -->
-                            <LinearLayout
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:padding="12dp"
-                                android:background="#0F172A"
-                                android:layout_marginStart="8dp">
+                <Button
+                    android:id="@+id/btnHistMediciones"
+                    style="@style/Ehria.Boton.Segmento"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Mediciones"
+                    app:icon="@drawable/ic_corazon" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
 
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="🫀 RITMO CARDÍACO"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold"
-                                    android:textColor="#F43F5E" />
+            <TextView
+                android:id="@+id/tvHistorialResumen"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="10dp"
+                android:paddingStart="4dp"
+                android:textSize="13sp"
+                android:textColor="@color/texto_tenue" />
 
-                                <TextView
-                                    android:id="@+id/tvBpmEstado"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Sin medición"
-                                    android:textSize="12sp"
-                                    android:textColor="#F43F5E"
-                                    android:gravity="center"
-                                    android:layout_marginTop="4dp" />
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
 
-                                <TextView
-                                    android:id="@+id/tvBpmValues"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="-- BPM"
-                                    android:textSize="28sp"
-                                    android:textStyle="bold"
-                                    android:textColor="#F43F5E"
-                                    android:layout_marginTop="4dp" />
-                            </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
 
-                        </LinearLayout>
+                    <LinearLayout
+                        android:id="@+id/layoutHistorialVacio"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="56dp"
+                        android:orientation="vertical"
+                        android:gravity="center_horizontal"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:id="@+id/ivHistorialVacio"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:src="@drawable/ic_nav_historial"
+                            android:importantForAccessibility="no"
+                            app:tint="#334155" />
 
                         <TextView
-                            android:id="@+id/tvAvisoMedico"
-                            android:layout_width="match_parent"
+                            android:id="@+id/tvHistorialVacio"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
-                            android:text="Medición orientativa basada en el acelerómetro. No es un dispositivo médico ni reemplaza la evaluación de un profesional de salud."
-                            android:textSize="11sp"
-                            android:textColor="#94A3B8"
-                            android:gravity="center" />
-
+                            android:gravity="center"
+                            android:textSize="14sp"
+                            android:lineSpacingExtra="3dp"
+                            android:textColor="@color/texto_tenue" />
                     </LinearLayout>
-                </androidx.cardview.widget.CardView>
 
-            </LinearLayout>
+                    <LinearLayout
+                        android:id="@+id/listaHistorial"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+                </LinearLayout>
+            </ScrollView>
 
+            <Button
+                android:id="@+id/btnBorrarHistorial"
+                style="@style/Ehria.Boton.Secundario"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="10dp"
+                android:text="Borrar historial"
+                android:textColor="#F87171"
+                app:iconTint="#F87171"
+                app:strokeColor="#5B2130"
+                app:icon="@drawable/ic_borrar" />
         </LinearLayout>
-    </ScrollView>
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/navInferior"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#0B1020"
+        app:itemIconTint="@color/color_nav_item"
+        app:itemTextColor="@color/color_nav_item"
+        app:itemActiveIndicatorStyle="@style/Ehria.IndicadorNav"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/menu_navegacion" />
 </LinearLayout>
