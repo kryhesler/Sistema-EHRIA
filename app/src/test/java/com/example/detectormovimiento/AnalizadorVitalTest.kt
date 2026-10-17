@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
 import kotlin.math.PI
@@ -176,6 +177,48 @@ class AnalizadorVitalTest {
         val m = generar(20.0, 100.0, 8, 0.005, { 0.0 }, { t -> 0.25 * sin(2 * PI * 0.25 * t) }, { 9.81 })
         val r = AnalizadorVital.analizar(m.t, m.x, m.y.copyOf(m.y.size - 3), m.z)
         assertNotNull(r.rpm)
+    }
+
+    @Test
+    fun pulsoEnOtroEje_telefonoInclinado() {
+        // Sobre el pectoral izquierdo el teléfono queda inclinado: el latido se ve en X, no en Z.
+        val m = generar(
+            20.0, 200.0, 11, 0.005,
+            fx = { t -> latidos(t, 80.0) },
+            fy = { t -> 0.2 * sin(2 * PI * 0.25 * t) },
+            fz = { 9.81 },
+        )
+        val r = analizar(m)
+        assertEquals(80.0, r.bpm!!.toDouble(), 3.0)
+        assertTrue(r.pulsoConfiable)
+    }
+
+    @Test
+    fun soloRespiracion_sinLatidos_noDaPulsoConfiable() {
+        for (semilla in 20L..40L) {
+            val m = generar(
+                20.0, 200.0, semilla, 0.01,
+                fx = { 0.0 },
+                fy = { t -> 0.2 * sin(2 * PI * 0.25 * t) },
+                fz = { 9.81 },
+            )
+            val r = analizar(m)
+            assertTrue("semilla $semilla dio pulso confiable sin latidos", r.bpm == null || !r.pulsoConfiable)
+        }
+    }
+
+    @Test
+    fun calidadEnVivo_distingueMesaPersonaYMovimiento() {
+        val r = Random(9)
+        fun ventana(f: (Int) -> Double) = FloatArray(150) { (f(it) + r.nextGaussian() * 0.005).toFloat() }
+        val quieto = ventana { 0.0 }
+        val respirando = ventana { 0.2 * sin(2 * PI * it / 200.0) }
+        val moviendose = ventana { 2.5 * sin(2 * PI * it / 30.0) }
+        val gravedad = ventana { 9.81 }
+        assertEquals(AnalizadorVital.CalidadSenal.SIN_MOVIMIENTO, AnalizadorVital.calidadSenal(quieto, quieto, gravedad))
+        assertEquals(AnalizadorVital.CalidadSenal.BUENA, AnalizadorVital.calidadSenal(quieto, respirando, gravedad))
+        assertEquals(AnalizadorVital.CalidadSenal.MUCHO_MOVIMIENTO, AnalizadorVital.calidadSenal(moviendose, quieto, gravedad))
+        assertNull(AnalizadorVital.calidadSenal(FloatArray(5), FloatArray(5), FloatArray(5)))
     }
 
     @Test

@@ -78,8 +78,10 @@ class DetectorSismicoTest {
         // El pico sin filtrar (para Richter y Mercalli) llega al máximo real de la sacudida.
         assertTrue(estados[primeraAlerta].pgaPicoBruto >= estados[primeraAlerta].pgaPico)
         assertTrue(estados[primeraAlerta].pgaPicoBruto > 0.55f)
-        // La alerta sigue visible después de que termina la sacudida.
-        assertEquals(Fase.ALERTA, estados.last().fase)
+        // La alerta sigue visible unos segundos después de la sacudida (termina a los 25 s)...
+        assertEquals(Fase.ALERTA, estados[(30_000L / pasoMs).toInt()].fase)
+        // ...y luego la pantalla vuelve a la normalidad.
+        assertEquals(Fase.NORMAL, estados.last().fase)
     }
 
     @Test
@@ -91,8 +93,9 @@ class DetectorSismicoTest {
             if (t in 5_000L until 20_000L) base + 2.0f else base
         }
         assertTrue(estados.any { it.fase == Fase.ALERTA && it.nivel == Nivel.FUERTE })
-        val enT45s = estados[(45_000L / pasoMs).toInt()]
-        assertEquals(Fase.ALERTA, enT45s.fase)
+        // La sacudida termina a los 20 s: la alerta dura unos 8 s más y se borra.
+        assertEquals(Fase.ALERTA, estados[(25_000L / pasoMs).toInt()].fase)
+        assertEquals(Fase.NORMAL, estados[(32_000L / pasoMs).toInt()].fase)
         assertEquals(Fase.NORMAL, estados.last().fase)
     }
 
@@ -103,6 +106,8 @@ class DetectorSismicoTest {
         detector.restablecer()
         val estado = detector.procesar(0.0f, 20_000L)
         assertFalse(estado.fase == Fase.ALERTA)
+        // Restablecer de verdad: con el teléfono quieto no vuelve a "evaluando".
+        assertEquals(Fase.NORMAL, estado.fase)
     }
 
     @Test

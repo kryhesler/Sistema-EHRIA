@@ -33,11 +33,33 @@ object AnalizadorVital {
         RESPIRACION_IRREGULAR,
     }
 
+    /** Cómo se ve la señal en los últimos segundos, para avisar mientras se mide. */
+    enum class CalidadSenal { SIN_MOVIMIENTO, BUENA, MUCHO_MOVIMIENTO }
+
+    private const val MOVIMIENTO_MINIMO_EN_VIVO = 0.015 // m/s²: por debajo parece una mesa
+
+    /**
+     * Evalúa una ventana corta (unos 3 s) de los tres ejes: si casi no se mueve, el teléfono
+     * no está sobre una persona; si se mueve mucho, la persona se está moviendo.
+     * Devuelve null si todavía hay muy pocas muestras.
+     */
+    fun calidadSenal(x: FloatArray, y: FloatArray, z: FloatArray): CalidadSenal? {
+        if (x.size < 20 || y.size != x.size || z.size != x.size) return null
+        val mayor = listOf(x, y, z).maxOf { eje -> desviacion(DoubleArray(eje.size) { eje[it].toDouble() }) }
+        return when {
+            mayor > MOVIMIENTO_EXCESIVO -> CalidadSenal.MUCHO_MOVIMIENTO
+            mayor < MOVIMIENTO_MINIMO_EN_VIVO -> CalidadSenal.SIN_MOVIMIENTO
+            else -> CalidadSenal.BUENA
+        }
+    }
+
     data class Resultado(
         val estado: EstadoMedicion,
         val rpm: Int?,
         val bpm: Int?,
         val frecuenciaMuestreoHz: Double,
+        /** true si el pulso salió con una periodicidad clara (no hace falta confirmarlo). */
+        val pulsoConfiable: Boolean = false,
     )
 
     private const val DURACION_MINIMA_S = 10.0
@@ -49,6 +71,10 @@ object AnalizadorVital {
     private const val MOVIMIENTO_EXCESIVO = 1.0      // m/s², desviación estándar de un eje
     private const val AMPLITUD_MIN_RESPIRACION = 0.004 // m/s², por debajo: mesa / objeto sólido
     private const val CORRELACION_MIN = 0.4
+    // El pulso es una señal más débil: se acepta desde 0.3, pero solo se considera
+    // "confiable" por sí sola desde 0.45 (si no, la app pide que dos análisis coincidan).
+    private const val CORRELACION_MIN_PULSO = 0.3
+    private const val CORRELACION_PULSO_CONFIABLE = 0.45
 
     /**
      * Nunca lanza excepciones: con datos dañados del sensor devuelve MUESTRA_INSUFICIENTE.
@@ -101,28 +127,38 @@ object AnalizadorVital {
             ?.let { porMinuto(it.first) }
 
         // ---------- Pulso ----------
-        val bpm = if (fs >= FRECUENCIA_MIN_PULSO_HZ) estimarPulso(ejes[2], fs.toDouble()) else null
+        val pulso = if (fs >= FRECUENCIA_MIN_PULSO_HZ) estimarPulso(ejes, fs.toDouble()) else null
+        val bpm = pulso?.first
 
         val estado = if (rpm == null) EstadoMedicion.RESPIRACION_IRREGULAR else EstadoMedicion.OK
-        return Resultado(estado, rpm, bpm, fsMedida)
+        return Resultado(estado, rpm, bpm, fsMedida, pulso?.second ?: false)
     }
 
-    private fun estimarPulso(zSinMedia: DoubleArray, fs: Double): Int? {
-        var s = Biquad.pasaAltos(5.0, fs).aplicar(zSinMedia)
-        s = Biquad.pasaAltos(5.0, fs).aplicar(s)
-        s = Biquad.pasaBajos(min(20.0, 0.4 * fs), fs).aplicar(s)
+    /**
+     * Devuelve (latidos por minuto, confiable) o null. Usa la energía de la vibración en los
+     * TRES ejes: si el teléfono queda algo inclinado (por ejemplo sobre el pectoral izquierdo),
+     * la vibración del latido se reparte entre ejes y uno solo no alcanza.
+     */
+    private fun estimarPulso(ejesSinMedia: List<DoubleArray>, fs: Double): Pair<Int, Boolean>? {
         val descarte = (DESCARTE_INICIAL_S * fs).toInt()
-        s = s.copyOfRange(descarte, s.size)
+        val filtrados = ejesSinMedia.map { eje ->
+            var s = Biquad.pasaAltos(5.0, fs).aplicar(eje)
+            s = Biquad.pasaAltos(5.0, fs).aplicar(s)
+            s = Biquad.pasaBajos(min(20.0, 0.4 * fs), fs).aplicar(s)
+            s.copyOfRange(descarte, s.size)
+        }
+        val n = filtrados.minOf { it.size }
 
-        var energia = DoubleArray(s.size) { s[it] * s[it] }
+        var energia = DoubleArray(n) { i -> filtrados.sumOf { it[i] * it[i] } }
         energia = Biquad.pasaBajos(4.0, fs).aplicar(energia)
         energia = Biquad.pasaBajos(4.0, fs).aplicar(energia)
         energia = quitarMedia(energia.copyOfRange(descarte, energia.size))
 
         // 40 a 150 latidos por minuto
         val pico = picoAutocorrelacion(energia, fs, 0.4, 1.5) ?: return null
-        if (pico.second < CORRELACION_MIN) return null
-        return porMinuto(pico.first)
+        if (pico.second < CORRELACION_MIN_PULSO) return null
+        val bpm = porMinuto(pico.first) ?: return null
+        return Pair(bpm, pico.second >= CORRELACION_PULSO_CONFIABLE)
     }
 
     /** Convierte un periodo en segundos a "por minuto"; null si el número no es válido. */

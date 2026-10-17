@@ -37,6 +37,15 @@ class SismografoView @JvmOverloads constructor(
 
     private val path = Path()
 
+    /** Valor que llega al borde de la gráfica (m/s²). */
+    var rango = 2.5f
+
+    fun limpiar() {
+        headIndex = 0
+        totalPuntosCount = 0
+        invalidate()
+    }
+
     fun agregarPunto(valor: Float) {
         puntos[headIndex] = valor
         headIndex = (headIndex + 1) % maxPoints
@@ -76,7 +85,7 @@ class SismografoView @JvmOverloads constructor(
         path.reset()
         val stepX = width / (maxPoints - 1)
         val startIndex = if (totalPuntosCount < maxPoints) 0 else headIndex
-        val scaleY = (height / 2f - 20f) / 2.5f
+        val scaleY = (height / 2f - 20f) / rango
 
         for (i in 0 until totalPuntosCount) {
             val index = (startIndex + i) % maxPoints

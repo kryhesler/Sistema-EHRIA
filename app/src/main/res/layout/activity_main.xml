@@ -41,6 +41,19 @@
             android:textStyle="bold"
             android:textColor="@color/texto" />
 
+        <ImageView
+            android:id="@+id/btnSonido"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="6dp"
+            android:padding="9dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Silenciar sonidos"
+            android:src="@drawable/ic_volumen"
+            app:tint="@color/texto_secundario" />
+
         <LinearLayout
             android:id="@+id/chipEstado"
             android:layout_width="wrap_content"
@@ -458,6 +471,7 @@
                             app:icon="@drawable/ic_iniciar" />
 
                         <LinearLayout
+                            android:id="@+id/cajaResultadoRespiracion"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="14dp"
@@ -505,6 +519,7 @@
                             android:drawableStart="@drawable/ic_corazon" />
 
                         <ImageView
+                            android:id="@+id/imgPulso"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:adjustViewBounds="true"
@@ -512,11 +527,12 @@
                             android:src="@drawable/ilustracion_pulso" />
 
                         <TextView
+                            android:id="@+id/tvInstruccionPulso"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="14dp"
                             android:layout_marginBottom="16dp"
-                            android:text="Igual para hombres y mujeres.\n1. Recuéstate boca arriba.\n2. Pon el teléfono plano, con la pantalla hacia arriba, sobre el lado IZQUIERDO del pecho (sobre el corazón). En el dibujo, I = izquierda y D = derecha de la persona.\n3. No hables ni te muevas hasta que termine."
+                            android:text="Igual para hombres y mujeres.\n1. Recuéstate boca arriba.\n2. Pon el teléfono plano, con la pantalla hacia arriba, sobre el lado IZQUIERDO del pecho (sobre el corazón). En el dibujo, I = izquierda y D = derecha de la persona.\n3. No hables ni te muevas. La app sigue midiendo hasta encontrar el pulso."
                             android:textSize="14sp"
                             android:textColor="@color/texto_secundario"
                             android:lineSpacingExtra="4dp" />
@@ -526,11 +542,12 @@
                             style="@style/Ehria.Boton"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Medir pulso · 15 s"
+                            android:text="Medir pulso"
                             android:backgroundTint="#BE123C"
                             app:icon="@drawable/ic_iniciar" />
 
                         <LinearLayout
+                            android:id="@+id/cajaResultadoPulso"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="14dp"
@@ -561,7 +578,73 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- Común: progreso, estado y cancelar -->
+                    <!-- Común: señal en vivo, progreso y estado -->
+                    <LinearLayout
+                        android:id="@+id/layoutMonitor"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:orientation="vertical"
+                        android:padding="14dp"
+                        android:background="@drawable/fondo_resultado"
+                        android:visibility="gone">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                style="@style/Ehria.Etiqueta"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="MOVIMIENTO EN VIVO"
+                                android:drawableStart="@drawable/ic_grafica" />
+
+                            <TextView
+                                android:id="@+id/tvCuenta"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="22sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+                        </LinearLayout>
+
+                        <com.example.detectormovimiento.SismografoView
+                            android:id="@+id/graficaVital"
+                            android:layout_width="match_parent"
+                            android:layout_height="96dp"
+                            android:layout_marginTop="10dp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <ImageView
+                                android:id="@+id/ivCalidad"
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_marginEnd="8dp"
+                                android:src="@drawable/ic_reloj"
+                                android:importantForAccessibility="no"
+                                app:tint="@color/texto_tenue" />
+
+                            <TextView
+                                android:id="@+id/tvCalidad"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Leyendo el sensor…"
+                                android:textSize="13sp"
+                                android:textColor="@color/texto_tenue" />
+                        </LinearLayout>
+                    </LinearLayout>
+
                     <com.google.android.material.progressindicator.LinearProgressIndicator
                         android:id="@+id/pbBiometricProgress"
                         android:layout_width="match_parent"
@@ -600,15 +683,6 @@
                             android:textColor="@color/texto_secundario" />
                     </LinearLayout>
 
-                    <Button
-                        android:id="@+id/btnCancelarBiometric"
-                        style="@style/Ehria.Boton.Secundario"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:text="Cancelar medición"
-                        android:visibility="gone"
-                        app:icon="@drawable/ic_cerrar" />
                 </LinearLayout>
 
                 <TextView
@@ -617,7 +691,7 @@
                     android:layout_marginTop="14dp"
                     android:paddingStart="4dp"
                     android:paddingEnd="4dp"
-                    android:text="Mientras se mide, la detección de sismos se pausa. Si el teléfono está sobre una persona pero no se detecta el pulso, la app vuelve a medirlo automáticamente hasta encontrarlo. Valores orientativos: no es un dispositivo médico."
+                    android:text="Antes de medir hay una cuenta regresiva de 3 segundos para colocar el teléfono. Al terminar, la app avisa con un sonido y dice el resultado en voz alta (el botón de volumen de arriba silencia estos sonidos). Mientras se mide no suena nada, para no mover el sensor, y la detección de sismos se pausa. Valores orientativos: no es un dispositivo médico."
                     android:textSize="12sp"
                     android:textColor="#64748B"
                     android:lineSpacingExtra="2dp"

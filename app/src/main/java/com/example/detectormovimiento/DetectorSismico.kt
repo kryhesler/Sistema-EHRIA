@@ -10,7 +10,8 @@ import kotlin.math.max
  *   así un teléfono viejo y ruidoso no da falsas alarmas.
  * - Un sismo se confirma solo si el movimiento se sostiene [duracionVerificacionMs],
  *   tolerando pausas cortas (las ondas del sismo no son constantes).
- * - La alerta se mantiene [retencionAlertaMs] después de que el movimiento termina.
+ * - La alerta se mantiene [retencionAlertaMs] después de que el movimiento termina
+ *   (el sismo ya quedó guardado en el historial; la pantalla vuelve pronto a la normalidad).
  *
  * No depende de Android, así que se prueba con pruebas unitarias normales.
  */
@@ -20,7 +21,7 @@ class DetectorSismico(
     private val calibracionMs: Long = 3_000L,
     private val duracionVerificacionMs: Long = 10_000L,
     private val toleranciaPausaMs: Long = 1_500L,
-    private val retencionAlertaMs: Long = 30_000L,
+    private val retencionAlertaMs: Long = 8_000L,
     private val constanteRuidoMs: Float = 30_000f,
 ) {
     enum class Fase { CALIBRANDO, NORMAL, EVALUANDO, ALERTA }
@@ -135,7 +136,10 @@ class DetectorSismico(
 
     /** Botón "restablecer": vuelve a vigilancia normal sin perder la calibración. */
     fun restablecer() {
-        if (fase != Fase.CALIBRANDO) reiniciarEvento()
+        if (fase == Fase.CALIBRANDO) return
+        reiniciarEvento()
+        // Sin esto la señal suavizada seguía alta y el detector volvía a "evaluando" de inmediato.
+        pgaFiltrado = 0f
     }
 
     private fun reiniciarEvento() {
