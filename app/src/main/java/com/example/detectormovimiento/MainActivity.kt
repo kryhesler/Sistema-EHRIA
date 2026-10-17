@@ -163,8 +163,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var puertaAbierta = false
     private var ultimoModoLed: ProtocoloArduino.ModoLed? = null
     private val presencia = DetectorPresencia()
-    private val retiro = DetectorRetiro()
-    private var fijarReferenciaEnMs = 0L
     private var robotDespierto = false
     private var ultimoSaludoMs = 0L
     private var hablandoSaludo = false
@@ -942,16 +940,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             ultimoModoLed = null
             actualizarLedExterior()
             arduino.enviar(ProtocoloArduino.comandoLuzInterior(puertaAbierta))
-            // Conectado al cuerpo de la estación: modo robot (si no se está midiendo).
-            if (!medicionActiva) entrarModoEstacion()
+            // La cabeza volvió al cuerpo: siempre modo estación. El medidor solo se usa fuera de ella.
+            handler.removeCallbacks(herramientaTrasDesconexion)
+            if (medicionActiva) cancelarMedicion("La estación se conectó: medición detenida.")
+            if (modoRobot != ModoRobot.ESTACION) entrarModoEstacion()
         } else {
             ultimaLectura = null
             presencia.reiniciar()
             actualizarPanelEstacion()
-            // Se desconectó el cable con el robot en la pared: sacaron la cabeza.
+            // Se desconectó el cable: sacaron la cabeza. Se espera un momento por si fue solo
+            // un falso contacto al acomodar el teléfono en la carcasa.
             if (modoRobot == ModoRobot.ESTACION) {
-                entrarModoHerramienta("Ya estoy fuera de la estación. Elige respiración o pulso y te guío paso a paso.")
+                handler.removeCallbacks(herramientaTrasDesconexion)
+                handler.postDelayed(herramientaTrasDesconexion, ESPERA_DESCONEXION_MS)
             }
+        }
+    }
+
+    private val herramientaTrasDesconexion = Runnable {
+        if (!arduino.conectado && modoRobot == ModoRobot.ESTACION) {
+            entrarModoHerramienta("Ya estoy fuera de la estación. Elige respiración o pulso y te guío paso a paso.")
         }
     }
 
@@ -1031,6 +1039,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun actualizarTarjetaEstacion() {
         if (!::arduino.isInitialized) return
         val conectada = arduino.conectado
+        // El medidor solo está disponible fuera de la estación.
+        val medidor = if (conectada) View.GONE else View.VISIBLE
+        btnRobotHerramienta.visibility = medidor
+        findViewById<View>(R.id.btnModoHerramienta).visibility = medidor
         val color = Color.parseColor(if (conectada) "#22C55E" else "#94A3B8")
         tvEstacionEstado.text = if (conectada) "CONECTADA" else "SIN CONECTAR"
         tvEstacionEstado.setTextColor(color)
@@ -1132,8 +1144,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mostrarHerramientaRobot(false)
         ocultarSismografoRobot()
         presencia.reiniciar()
-        retiro.olvidarReferencia()
-        fijarReferenciaEnMs = SystemClock.elapsedRealtime() + 4_000L  // cuando el teléfono ya está quieto
         actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_PESTANA_MS)
         actualizarPanelEstacion()
         dormir()
@@ -1141,6 +1151,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     /** Cabeza fuera del cuerpo: signos vitales en horizontal, con la cara del robot. */
     private fun entrarModoHerramienta(anuncio: String) {
+        // Con la estación conectada el teléfono está en la pared: no se mide a nadie.
+        if (arduino.conectado) return
         modoRobot = ModoRobot.HERRAMIENTA
         mostrarCapaRobot(true)
         mostrarHerramientaRobot(true)
@@ -1159,7 +1171,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (medicionActiva) cancelarMedicion("Medición detenida.")
         modoRobot = ModoRobot.NINGUNO
         handler.removeCallbacks(dormirRunnable)
-        retiro.olvidarReferencia()
         mostrarCapaRobot(false)
         decirEnBurbuja("")
         handler.removeCallbacks(ocultarSismografoRunnable)
@@ -1502,7 +1513,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     /** El botón de medir se convierte en "Detener" mientras se mide. */
     private fun alTocarMedir(tipo: TipoMedicion) {
-        if (medicionActiva) cancelarMedicion("Medición detenida.") else iniciarMedicion(tipo)
+        when {
+            medicionActiva -> cancelarMedicion("Medición detenida.")
+            ::arduino.isInitialized && arduino.conectado ->
+                Toast.makeText(this, "Saca el teléfono de la estación para medir", Toast.LENGTH_SHORT).show()
+            else -> iniciarMedicion(tipo)
+        }
     }
 
     private fun iniciarMedicion(tipo: TipoMedicion) {
@@ -2288,36 +2304,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             processSeismicSensor(event)
         }
 
-        // 2. ¿SACARON O COLOCARON EL TELÉFONO EN LA ESTACIÓN? (dirección de la gravedad)
-        if (sensorType == Sensor.TYPE_ACCELEROMETER && !isBiometricMeasuring) vigilarRetiro(event)
-
-        // 3. CAPTURA DE MUESTRAS PARA BIOMETRÍA (los tres ejes, con su hora exacta)
+        // 2. CAPTURA DE MUESTRAS PARA BIOMETRÍA (los tres ejes, con su hora exacta)
         if (sensorType == Sensor.TYPE_ACCELEROMETER && isBiometricMeasuring) {
             tiemposNs.add(event.timestamp)
             muestrasX.add(event.values[0])
             muestrasY.add(event.values[1])
             muestrasZ.add(event.values[2])
             alimentarMonitor(event.timestamp, event.values[0], event.values[1], event.values[2])
-        }
-    }
-
-    private fun vigilarRetiro(event: SensorEvent) {
-        if (modoRobot == ModoRobot.NINGUNO) return
-        val ahora = SystemClock.elapsedRealtime()
-        val evento = retiro.procesar(event.values[0], event.values[1], event.values[2], ahora)
-        if (modoRobot == ModoRobot.ESTACION && fijarReferenciaEnMs > 0L && ahora >= fijarReferenciaEnMs) {
-            fijarReferenciaEnMs = 0L
-            retiro.fijarReferencia()
-            return
-        }
-        when (evento) {
-            DetectorRetiro.Evento.RETIRADO -> if (modoRobot == ModoRobot.ESTACION) {
-                entrarModoHerramienta("Ya estoy fuera de la estación. Elige respiración o pulso y te guío paso a paso.")
-            }
-            DetectorRetiro.Evento.COLOCADO -> if (modoRobot == ModoRobot.HERRAMIENTA && !medicionActiva) {
-                entrarModoEstacion()
-            }
-            null -> Unit
         }
     }
 
@@ -2343,6 +2336,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // La sirena casi se apaga mientras habla la voz, para que las indicaciones se entiendan.
         private const val VOLUMEN_SIRENA_BAJO_VOZ = 0.12f
         const val ESPERA_PARA_DORMIR_MS = 45_000L
+        // Una desconexión más corta se toma como falso contacto del cable.
+        const val ESPERA_DESCONEXION_MS = 1_500L
         const val ESPERA_ENTRE_SALUDOS_MS = 60_000L
         const val ACCION_SIMULAR_ARDUINO = "com.example.detectormovimiento.SIMULAR_ARDUINO"
         const val PREF_MUJER = "respiracion_mujer"

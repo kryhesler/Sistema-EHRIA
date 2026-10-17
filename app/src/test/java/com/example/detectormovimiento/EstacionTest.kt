@@ -8,8 +8,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.cos
-import kotlin.math.sin
 
 class EstacionTest {
 
@@ -73,48 +71,6 @@ class EstacionTest {
             t += 250
         }
         assertFalse(d.presente)
-    }
-
-    // ---------- Cabeza retirada (gravedad) ----------
-
-    private fun alimentar(d: DetectorRetiro, gradosInclinacion: Double, desdeMs: Long, hastaMs: Long): List<DetectorRetiro.Evento> {
-        val eventos = mutableListOf<DetectorRetiro.Evento>()
-        val rad = Math.toRadians(gradosInclinacion)
-        var t = desdeMs
-        while (t < hastaMs) {
-            d.procesar(0f, (9.81 * sin(rad)).toFloat(), (9.81 * cos(rad)).toFloat(), t)?.let { eventos += it }
-            t += 20
-        }
-        return eventos
-    }
-
-    @Test
-    fun retiro_alSacarloYColocarlo() {
-        val d = DetectorRetiro()
-        alimentar(d, 0.0, 0, 2_000)
-        d.fijarReferencia()
-        assertTrue(alimentar(d, 5.0, 2_000, 4_000).isEmpty())   // vibraciones pequeñas: nada
-        assertEquals(listOf(DetectorRetiro.Evento.RETIRADO), alimentar(d, 70.0, 4_000, 7_000))
-        assertEquals(listOf(DetectorRetiro.Evento.COLOCADO), alimentar(d, 3.0, 7_000, 12_000))
-    }
-
-    @Test
-    fun retiro_sacudidaSinGirarNoCuenta() {
-        val d = DetectorRetiro()
-        alimentar(d, 0.0, 0, 2_000)
-        d.fijarReferencia()
-        val eventos = mutableListOf<DetectorRetiro.Evento>()
-        var t = 2_000L
-        val r = java.util.Random(1)
-        while (t < 20_000L) {
-            // Sismo fuerte: ±3 m/s² en todos los ejes, sin cambiar la orientación del teléfono.
-            d.procesar(
-                (r.nextGaussian() * 3).toFloat(), (r.nextGaussian() * 3).toFloat(),
-                (9.81 + r.nextGaussian() * 3).toFloat(), t
-            )?.let { eventos += it }
-            t += 20
-        }
-        assertTrue(eventos.isEmpty())
     }
 
     // ---------- Asistente ----------

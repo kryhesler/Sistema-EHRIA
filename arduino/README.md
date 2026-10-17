@@ -52,7 +52,7 @@ Todos los GND van juntos: Arduino, sensores, servo, LED y fuente externa. El con
   - amarillo pulsando rápido: verificando un movimiento;
   - rojo intenso, mitades alternadas: sismo.
 - **LED interior:** luz blanca cálida mientras la puerta del botiquín está abierta.
-- **Sacar el teléfono de la estación:** la app lo detecta, porque se desconecta el cable o porque el teléfono cambia de posición, y pasa al modo primeros auxilios. Al volver a colocarlo, regresa al modo estación.
+- **Sacar el teléfono de la estación:** al desconectarse el cable (por más de 1.5 s), la app pasa al modo primeros auxilios para medir respiración y pulso. Al volver a conectarlo, regresa al modo estación. Mientras la estación está conectada, el medidor no se puede abrir: acomodar el teléfono en la carcasa nunca lo activa.
 
 ## Probar sin Arduino (solo para desarrollo)
 
