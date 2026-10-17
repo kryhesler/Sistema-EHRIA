@@ -1,13 +1,21 @@
 package com.example.detectormovimiento
 
 import android.content.ClipData
+import android.content.BroadcastReceiver
 import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Rect
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.usb.UsbManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -17,15 +25,23 @@ import android.speech.tts.UtteranceProgressListener
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.RelativeSizeSpan
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.detectormovimiento.AnalizadorVital.EstadoMedicion
 import com.example.detectormovimiento.DetectorSismico.Fase
 import com.example.detectormovimiento.DetectorSismico.Nivel
@@ -35,11 +51,14 @@ import com.example.detectormovimiento.HistorialRepositorio.TipoMedicion
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
@@ -133,6 +152,56 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // Después de medir signos vitales, la persona levanta y acomoda el teléfono: esos
     // movimientos no son sismos. La detección se reanuda pasado este momento.
     private var reanudarSismosEnMs = 0L
+
+    // Estación: Arduino (DHT, ultrasónico, servo, LED) y modo robot
+    private enum class ModoRobot { NINGUNO, ESTACION, HERRAMIENTA }
+
+    private var modoRobot = ModoRobot.NINGUNO
+    private lateinit var arduino: ConexionArduino
+    private var receptorSimulador: BroadcastReceiver? = null
+    private var ultimaLectura: ProtocoloArduino.Lectura? = null
+    private var versionArduino: String? = null
+    private var puertaAbierta = false
+    private var ultimoModoLed: ProtocoloArduino.ModoLed? = null
+    private val presencia = DetectorPresencia()
+    private val retiro = DetectorRetiro()
+    private var fijarReferenciaEnMs = 0L
+    private var robotDespierto = false
+    private var ultimoSaludoMs = 0L
+    private var hablandoSaludo = false
+    private var indiceGrupoPanel = 0
+    private var indiceTarjetaSignos = 1
+    private lateinit var layoutRobot: View
+    private lateinit var caraRobot: CaraRobotView
+    private lateinit var tvBurbuja: TextView
+    private lateinit var panelEstacion: View
+    private lateinit var scrollHerramienta: ScrollView
+    private lateinit var contenedorHerramienta: LinearLayout
+    private lateinit var tvRobotArduino: TextView
+    private lateinit var tvRobotEstado: TextView
+    private lateinit var tvRobotTemp: TextView
+    private lateinit var tvRobotHum: TextView
+    private lateinit var tvRobotCalor: TextView
+    private lateinit var tvRobotSismos: TextView
+    private lateinit var btnRobotBotiquin: Button
+    private lateinit var tvEstacionEstado: TextView
+    private lateinit var tvEstacionDatos: TextView
+    private lateinit var btnEstacionPuerta: Button
+    private lateinit var tarjetaSignos: View
+    // Interruptor de la pestaña Sismos. No se guarda: al abrir la app siempre vigila, por seguridad.
+    private var deteccionActiva = true
+    private var enPestanaSignos = false
+    private var sismosEnPausa = false
+    private lateinit var switchDeteccion: MaterialSwitch
+    private lateinit var tvDetalleDeteccion: TextView
+
+    /** Si se deja la pestaña de signos vitales abierta sin usar, vuelve a vigilar sismos. */
+    private val inactividadRunnable = Runnable {
+        if (enPestanaSignos && !medicionActiva) {
+            navInferior.selectedItemId = R.id.nav_sismos
+            Toast.makeText(this, "Volviendo a vigilar sismos", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Biometría: respiración y pulso se miden por separado
     private var panelSignos = TipoMedicion.RESPIRACION
@@ -303,6 +372,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         chipEstado.setOnClickListener { navInferior.selectedItemId = R.id.nav_sismos }
 
+        switchDeteccion = findViewById(R.id.switchDeteccion)
+        tvDetalleDeteccion = findViewById(R.id.tvDetalleDeteccion)
+        switchDeteccion.setOnCheckedChangeListener { _, activa ->
+            deteccionActiva = activa
+            tvDetalleDeteccion.text = if (activa) {
+                "Apágala antes de descolgar o manipular el teléfono"
+            } else "Apagada: no se avisarán sismos. Enciéndela al volver a colocar el teléfono"
+            actualizarPausaSismos(graciaMs = 0L)
+            Toast.makeText(
+                this, if (activa) "Detección de sismos activada" else "Detección de sismos desactivada", Toast.LENGTH_SHORT
+            ).show()
+        }
+
         btnRestablecer.setOnClickListener {
             detenerAlarma()
             try {
@@ -340,6 +422,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.btnBorrarHistorial).setOnClickListener { confirmarBorrarHistorial() }
 
         mostrarEscalaRichter(null)
+        iniciarEstacion()
         mostrarErrorAnteriorSiHay()
     }
 
@@ -350,6 +433,58 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         scrollSignos.visibility = if (itemId == R.id.nav_signos) View.VISIBLE else View.GONE
         layoutHistorial.visibility = if (itemId == R.id.nav_historial) View.VISIBLE else View.GONE
         if (itemId == R.id.nav_historial) mostrarHistorial()
+
+        // En la pestaña de signos vitales alguien está manipulando el teléfono: no es un sismo.
+        enPestanaSignos = itemId == R.id.nav_signos
+        actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_PESTANA_MS)
+        reiniciarInactividad()
+    }
+
+    private fun reiniciarInactividad() {
+        handler.removeCallbacks(inactividadRunnable)
+        if (enPestanaSignos) handler.postDelayed(inactividadRunnable, INACTIVIDAD_SIGNOS_MS)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        if (enPestanaSignos && ev?.action == MotionEvent.ACTION_DOWN) reiniciarInactividad()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /**
+     * La detección se pausa si está apagada con el interruptor, si se está midiendo o si la
+     * pestaña de signos vitales está abierta. Al reanudarse espera [graciaMs] antes de vigilar.
+     */
+    private fun actualizarPausaSismos(graciaMs: Long) {
+        val pausar = !deteccionActiva || medicionActiva || enPestanaSignos || modoRobot == ModoRobot.HERRAMIENTA
+        if (pausar) {
+            if (!sismosEnPausa) pausarSismos()
+            sismosEnPausa = true
+            mostrarSismosPausados()
+        } else if (sismosEnPausa) {
+            sismosEnPausa = false
+            reanudarSismosEnMs = SystemClock.elapsedRealtime() + graciaMs
+            ultimaFase = null
+            ultimoAspectoEstado = null
+            ponerEstadoGlobal(R.drawable.ic_reloj, "Reanudando", "#94A3B8")
+        }
+    }
+
+    private fun mostrarSismosPausados() {
+        val desactivada = !deteccionActiva
+        val gris = Color.parseColor("#94A3B8")
+        ponerEstadoGlobal(R.drawable.ic_pausa, if (desactivada) "Sismos desactivados" else "Sismos en pausa", "#94A3B8")
+        ivEstadoSismo.setImageResource(R.drawable.ic_pausa)
+        ivEstadoSismo.imageTintList = ColorStateList.valueOf(gris)
+        circuloEstado.backgroundTintList = ColorStateList.valueOf(conAlfa(gris, 0x26))
+        tvStatusBadge.text = if (desactivada) "DETECCIÓN DESACTIVADA" else "DETECCIÓN EN PAUSA"
+        tvStatusBadge.setTextColor(gris)
+        tvNivelMovimiento.text = if (desactivada) "No se avisarán sismos" else "Se está usando el teléfono"
+        tvAceleracionPico.text = "Aceleración actual: --"
+        tvAceleracionPico.setTextColor(gris)
+        tvQuake30sTimer.text = if (desactivada) {
+            "Enciende \"Detección de sismos\" al volver a colocar el teléfono."
+        } else "Se reanuda sola al terminar de medir y salir de Signos vitales."
+        btnRestablecer.visibility = View.GONE
     }
 
     /** El mismo color con transparencia (para fondos suaves detrás de un ícono). */
@@ -362,6 +497,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ivEstadoGlobal.setImageResource(icono)
         ivEstadoGlobal.imageTintList = ColorStateList.valueOf(c)
         chipEstado.backgroundTintList = ColorStateList.valueOf(conAlfa(c, 0x26))
+        if (::tvRobotEstado.isInitialized) {
+            tvRobotEstado.text = texto
+            tvRobotEstado.setTextColor(c)
+            actualizarLedExterior()
+        }
     }
 
     /** Si la app se cerró por un error la vez anterior, lo muestra para poder reportarlo. */
@@ -390,8 +530,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // ===================== SISMOLOGÍA =====================
 
     private fun processSeismicSensor(event: SensorEvent) {
-        // Durante una medición (y un rato después) el teléfono está en manos de una persona.
-        if (medicionActiva) return
+        // Con la detección apagada, durante una medición o en la pestaña de signos vitales
+        // (y un rato después) el teléfono está en manos de una persona.
+        if (sismosEnPausa || hablandoSaludo) return
         if (reanudarSismosEnMs > 0L) {
             if (SystemClock.elapsedRealtime() < reanudarSismosEnMs) return
             reanudarSismosEnMs = 0L
@@ -415,6 +556,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (estado.alertaNueva) {
             ultimoNivel = estado.nivel
             iniciarAlarma()
+            alEmpezarSismoEnEstacion()
             // Ante un sismo, mostrar la pestaña de sismos esté donde esté el usuario.
             if (navInferior.selectedItemId != R.id.nav_sismos) navInferior.selectedItemId = R.id.nav_sismos
         }
@@ -454,6 +596,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             val terminoSolo = sismoActual != null  // no fue con el botón "restablecer"
             finalizarSismo()
             if (terminoSolo) {
+                alTerminarSismoEnEstacion()
                 detenerAlarma()
                 sonidos.alarma(SintetizadorSonidos.despejado())
                 handler.postDelayed({ hablarAlerta("La sacudida terminó. Revisa si hay personas heridas.") }, 900L)
@@ -661,6 +804,403 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sonidos.detenerSirena()
     }
 
+    // ===================== ESTACIÓN: ARDUINO Y MODO ROBOT =====================
+
+    private fun iniciarEstacion() {
+        layoutRobot = findViewById(R.id.layoutRobot)
+        caraRobot = findViewById(R.id.caraRobot)
+        tvBurbuja = findViewById(R.id.tvBurbuja)
+        panelEstacion = findViewById(R.id.panelEstacion)
+        scrollHerramienta = findViewById(R.id.scrollHerramienta)
+        contenedorHerramienta = findViewById(R.id.contenedorHerramienta)
+        tvRobotArduino = findViewById(R.id.tvRobotArduino)
+        tvRobotEstado = findViewById(R.id.tvRobotEstado)
+        tvRobotTemp = findViewById(R.id.tvRobotTemp)
+        tvRobotHum = findViewById(R.id.tvRobotHum)
+        tvRobotCalor = findViewById(R.id.tvRobotCalor)
+        tvRobotSismos = findViewById(R.id.tvRobotSismos)
+        btnRobotBotiquin = findViewById(R.id.btnRobotBotiquin)
+        tvEstacionEstado = findViewById(R.id.tvEstacionEstado)
+        tvEstacionDatos = findViewById(R.id.tvEstacionDatos)
+        btnEstacionPuerta = findViewById(R.id.btnEstacionPuerta)
+        tarjetaSignos = findViewById(R.id.tarjetaSignos)
+
+        btnEstacionPuerta.setOnClickListener { abrirBotiquin(!puertaAbierta) }
+        btnRobotBotiquin.setOnClickListener { abrirBotiquin(!puertaAbierta) }
+        findViewById<Button>(R.id.btnModoRobot).setOnClickListener { entrarModoEstacion() }
+        findViewById<Button>(R.id.btnRobotHerramienta).setOnClickListener {
+            entrarModoHerramienta("Modo primeros auxilios. Elige respiración o pulso y sigue las indicaciones.")
+        }
+        findViewById<View>(R.id.btnSalirRobot).setOnClickListener { atrasEnModoRobot() }
+        caraRobot.setOnClickListener {
+            if (modoRobot == ModoRobot.ESTACION) despertar(saludar = true)
+        }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (modoRobot != ModoRobot.NINGUNO) {
+                    atrasEnModoRobot()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
+
+        arduino = ConexionArduino(this, ::alMensajeArduino, ::alCambiarConexion)
+        arduino.iniciar()
+        registrarSimuladorSiDepuracion()
+        actualizarTarjetaEstacion()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Se conectó el Arduino mientras la app estaba abierta.
+        if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) arduino.conectar()
+    }
+
+    private fun alCambiarConexion(conectado: Boolean) {
+        actualizarTarjetaEstacion()
+        if (conectado) {
+            ultimoModoLed = null
+            actualizarLedExterior()
+            arduino.enviar(ProtocoloArduino.comandoLuzInterior(puertaAbierta))
+            // Conectado al cuerpo de la estación: modo robot (si no se está midiendo).
+            if (!medicionActiva) entrarModoEstacion()
+        } else {
+            ultimaLectura = null
+            presencia.reiniciar()
+            actualizarPanelEstacion()
+            // Se desconectó el cable con el robot en la pared: sacaron la cabeza.
+            if (modoRobot == ModoRobot.ESTACION) {
+                entrarModoHerramienta("Me sacaste de la estación. Modo primeros auxilios: elige respiración o pulso.")
+            }
+        }
+    }
+
+    private fun alMensajeArduino(mensaje: ProtocoloArduino.Mensaje) {
+        when (mensaje) {
+            is ProtocoloArduino.Mensaje.Datos -> {
+                val nueva = mensaje.lectura
+                val previa = ultimaLectura
+                // El DHT a veces falla una lectura: se conserva el último valor válido.
+                ultimaLectura = ProtocoloArduino.Lectura(
+                    nueva.temperaturaC ?: previa?.temperaturaC,
+                    nueva.humedad ?: previa?.humedad,
+                    nueva.distanciaCm,
+                )
+                actualizarDatosEstacion()
+                if (modoRobot == ModoRobot.ESTACION) {
+                    val distancia = nueva.distanciaCm
+                    if (distancia != null && distancia < 160f) programarSueno()
+                    when (presencia.procesar(distancia, SystemClock.elapsedRealtime())) {
+                        DetectorPresencia.Evento.LLEGO -> despertar(saludar = true)
+                        DetectorPresencia.Evento.SE_FUE -> dormir()
+                        null -> Unit
+                    }
+                }
+            }
+            is ProtocoloArduino.Mensaje.Hola -> {
+                versionArduino = mensaje.version
+                actualizarTarjetaEstacion()
+            }
+            is ProtocoloArduino.Mensaje.Puerta -> {
+                puertaAbierta = mensaje.abierta
+                actualizarBotonesBotiquin()
+            }
+        }
+    }
+
+    private fun abrirBotiquin(abrir: Boolean) {
+        if (!arduino.conectado) {
+            Toast.makeText(this, "Conecta el Arduino de la estación para mover la puerta", Toast.LENGTH_SHORT).show()
+            return
+        }
+        puertaAbierta = abrir
+        arduino.enviar(ProtocoloArduino.comandoPuerta(abrir))
+        // La luz de adentro se enciende con la puerta abierta para ver el botiquín.
+        arduino.enviar(ProtocoloArduino.comandoLuzInterior(abrir))
+        actualizarBotonesBotiquin()
+    }
+
+    private fun actualizarBotonesBotiquin() {
+        val texto = if (puertaAbierta) "Cerrar botiquín" else "Abrir botiquín"
+        btnEstacionPuerta.text = texto
+        btnRobotBotiquin.text = texto
+    }
+
+    /** El LED de afuera repite el estado de la detección para verlo desde lejos. */
+    private fun actualizarLedExterior() {
+        if (!::arduino.isInitialized || !arduino.conectado) return
+        val modo = when {
+            sismosEnPausa -> ProtocoloArduino.ModoLed.PAUSA
+            ultimaFase == Fase.ALERTA -> ProtocoloArduino.ModoLed.ALERTA
+            ultimaFase == Fase.EVALUANDO -> ProtocoloArduino.ModoLed.AVISO
+            ultimaFase == Fase.CALIBRANDO -> ProtocoloArduino.ModoLed.PAUSA
+            else -> ProtocoloArduino.ModoLed.NORMAL
+        }
+        if (modo == ultimoModoLed) return
+        ultimoModoLed = modo
+        arduino.enviar(ProtocoloArduino.comandoLedExterior(modo))
+    }
+
+    private fun actualizarTarjetaEstacion() {
+        if (!::arduino.isInitialized) return
+        if (arduino.conectado) {
+            val version = versionArduino?.let { " · versión $it" }.orEmpty()
+            tvEstacionEstado.text = "Arduino conectado$version"
+            tvEstacionEstado.setTextColor(Color.parseColor("#22C55E"))
+            tvRobotArduino.text = "Estación conectada"
+            tvRobotArduino.setTextColor(Color.parseColor("#22C55E"))
+        } else {
+            tvEstacionEstado.text = "Sin conectar: conecta el Arduino por USB"
+            tvEstacionEstado.setTextColor(Color.parseColor("#94A3B8"))
+            tvRobotArduino.text = "Estación sin conectar"
+            tvRobotArduino.setTextColor(Color.parseColor("#94A3B8"))
+        }
+        actualizarDatosEstacion()
+    }
+
+    private fun actualizarDatosEstacion() {
+        val l = ultimaLectura
+        val temp = l?.temperaturaC?.let { String.format(Locale.getDefault(), "%.1f °C", it) } ?: "--"
+        val hum = l?.humedad?.let { "${it.roundToInt()} %" } ?: "--"
+        val dist = l?.distanciaCm?.let { "${it.roundToInt()} cm" } ?: "--"
+        tvEstacionDatos.text = "Temperatura $temp · Humedad $hum · Distancia $dist"
+        actualizarPanelEstacion()
+    }
+
+    /** Datos del panel derecho del robot: clima, sensación térmica y sismos de hoy. */
+    private fun actualizarPanelEstacion() {
+        val l = ultimaLectura
+        val t = l?.temperaturaC
+        val h = l?.humedad
+        tvRobotTemp.text = t?.let { "${it.roundToInt()}°" } ?: "--"
+        tvRobotHum.text = h?.let { "${it.roundToInt()}%" } ?: "--"
+        if (t != null && h != null) {
+            val indice = AsistenteEstacion.indiceCalor(t, h)
+            tvRobotCalor.text = "${indice.roundToInt()}°"
+            tvRobotCalor.setTextColor(
+                Color.parseColor(
+                    when {
+                        indice >= 41 -> "#F87171"
+                        indice >= 32 -> "#FBBF24"
+                        else -> "#F8FAFC"
+                    }
+                )
+            )
+        } else {
+            tvRobotCalor.text = "--"
+            tvRobotCalor.setTextColor(Color.parseColor("#F8FAFC"))
+        }
+        if (modoRobot != ModoRobot.NINGUNO) {
+            val hoy = sismosDeHoy()
+            tvRobotSismos.text = if (hoy.isEmpty()) {
+                "Hoy: sin actividad sísmica"
+            } else {
+                val m = EscalaSismica.magnitudEstimada(hoy.maxBy { it.fechaMs }.pgaPicoBruto)
+                val ultimo = m?.let { String.format(Locale.getDefault(), " · último ≈ %.1f", it) }.orEmpty()
+                "Hoy: ${hoy.size} ${if (hoy.size == 1) "sismo" else "sismos"}$ultimo"
+            }
+        }
+    }
+
+    private fun sismosDeHoy(): List<RegistroSismo> {
+        val inicioDelDia = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        return historial.sismos().filter { it.fechaMs >= inicioDelDia }
+    }
+
+    // ---------- Modos del robot ----------
+
+    /** Teléfono colocado en la pared: cara del robot, horizontal, despierta al acercarse alguien. */
+    private fun entrarModoEstacion() {
+        if (medicionActiva) return
+        devolverTarjetaSignos()
+        modoRobot = ModoRobot.ESTACION
+        if (navInferior.selectedItemId != R.id.nav_sismos) navInferior.selectedItemId = R.id.nav_sismos
+        mostrarCapaRobot(true)
+        panelEstacion.visibility = View.VISIBLE
+        scrollHerramienta.visibility = View.GONE
+        presencia.reiniciar()
+        retiro.olvidarReferencia()
+        fijarReferenciaEnMs = SystemClock.elapsedRealtime() + 4_000L  // cuando el teléfono ya está quieto
+        actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_PESTANA_MS)
+        actualizarPanelEstacion()
+        dormir()
+    }
+
+    /** Cabeza fuera del cuerpo: signos vitales en horizontal, con la cara del robot. */
+    private fun entrarModoHerramienta(anuncio: String) {
+        modoRobot = ModoRobot.HERRAMIENTA
+        mostrarCapaRobot(true)
+        moverTarjetaSignosAlRobot()
+        panelEstacion.visibility = View.GONE
+        scrollHerramienta.visibility = View.VISIBLE
+        actualizarPausaSismos(graciaMs = 0L)
+        handler.removeCallbacks(dormirRunnable)
+        robotDespierto = true
+        brilloPantalla(1f)
+        caraRobot.expresion = CaraRobotView.Expresion.DESPIERTO
+        tvBurbuja.text = anuncio
+        hablar(anuncio)
+    }
+
+    private fun salirModoRobot() {
+        if (medicionActiva) cancelarMedicion("Medición detenida.")
+        devolverTarjetaSignos()
+        modoRobot = ModoRobot.NINGUNO
+        handler.removeCallbacks(dormirRunnable)
+        retiro.olvidarReferencia()
+        mostrarCapaRobot(false)
+        actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_PESTANA_MS)
+    }
+
+    /** Botón de cerrar o "atrás": de herramienta vuelve a estación; de estación, al panel. */
+    private fun atrasEnModoRobot() {
+        when (modoRobot) {
+            ModoRobot.HERRAMIENTA -> if (arduino.conectado) entrarModoEstacion() else salirModoRobot()
+            ModoRobot.ESTACION -> salirModoRobot()
+            ModoRobot.NINGUNO -> Unit
+        }
+    }
+
+    private fun mostrarCapaRobot(visible: Boolean) {
+        layoutRobot.visibility = if (visible) View.VISIBLE else View.GONE
+        requestedOrientation = if (visible) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        val barras = WindowCompat.getInsetsController(window, window.decorView)
+        if (visible) {
+            barras.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            barras.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            barras.show(WindowInsetsCompat.Type.systemBars())
+            brilloPantalla(null)
+        }
+    }
+
+    /** null = brillo normal del sistema. */
+    private fun brilloPantalla(nivel: Float?) {
+        window.attributes = window.attributes.apply {
+            screenBrightness = nivel ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+    }
+
+    private fun moverTarjetaSignosAlRobot() {
+        if (tarjetaSignos.parent == contenedorHerramienta) return
+        val origen = tarjetaSignos.parent as ViewGroup
+        indiceGrupoPanel = origen.indexOfChild(grupoPanel)
+        indiceTarjetaSignos = origen.indexOfChild(tarjetaSignos)
+        origen.removeView(grupoPanel)
+        origen.removeView(tarjetaSignos)
+        contenedorHerramienta.addView(grupoPanel)
+        contenedorHerramienta.addView(tarjetaSignos)
+    }
+
+    private fun devolverTarjetaSignos() {
+        if (tarjetaSignos.parent != contenedorHerramienta) return
+        contenedorHerramienta.removeView(grupoPanel)
+        contenedorHerramienta.removeView(tarjetaSignos)
+        val destino = findViewById<ViewGroup>(R.id.layoutBiometricSection)
+        destino.addView(grupoPanel, indiceGrupoPanel.coerceIn(0, destino.childCount))
+        destino.addView(tarjetaSignos, indiceTarjetaSignos.coerceIn(0, destino.childCount))
+    }
+
+    private fun scrollDeSignos(): ScrollView = if (modoRobot == ModoRobot.HERRAMIENTA) scrollHerramienta else scrollSignos
+
+    // ---------- Despertar, saludar y dormir ----------
+
+    private fun despertar(saludar: Boolean) {
+        robotDespierto = true
+        brilloPantalla(1f)
+        if (caraRobot.expresion == CaraRobotView.Expresion.DORMIDO) caraRobot.expresion = CaraRobotView.Expresion.DESPIERTO
+        programarSueno()
+        val ahora = SystemClock.elapsedRealtime()
+        if (saludar && modoRobot == ModoRobot.ESTACION && ultimaFase != Fase.ALERTA &&
+            (ultimoSaludoMs == 0L || ahora - ultimoSaludoMs > ESPERA_ENTRE_SALUDOS_MS)
+        ) {
+            ultimoSaludoMs = ahora
+            val texto = AsistenteEstacion.saludo(
+                AsistenteEstacion.Datos(
+                    temperaturaC = ultimaLectura?.temperaturaC,
+                    humedad = ultimaLectura?.humedad,
+                    horaDelDia = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
+                    sismosHoy = sismosDeHoy(),
+                    deteccionActiva = deteccionActiva,
+                )
+            )
+            tvBurbuja.text = texto
+            caraRobot.expresion = CaraRobotView.Expresion.FELIZ
+            handler.postDelayed({
+                if (caraRobot.expresion == CaraRobotView.Expresion.FELIZ) caraRobot.expresion = CaraRobotView.Expresion.DESPIERTO
+            }, 1_500L)
+            // El parlante hace vibrar el teléfono: mientras saluda no se evalúan sismos.
+            if (hablar(texto, ID_VOZ_SALUDO)) {
+                hablandoSaludo = true
+                handler.postDelayed({ terminarSaludo() }, 30_000L)  // por si la voz nunca avisa
+            }
+        }
+    }
+
+    private fun terminarSaludo() {
+        if (!hablandoSaludo) return
+        hablandoSaludo = false
+        reanudarSismosEnMs = SystemClock.elapsedRealtime() + 1_500L
+    }
+
+    private fun dormir() {
+        if (modoRobot != ModoRobot.ESTACION || ultimaFase == Fase.ALERTA || presencia.presente) return
+        robotDespierto = false
+        caraRobot.expresion = CaraRobotView.Expresion.DORMIDO
+        tvBurbuja.text = ""
+        brilloPantalla(0.04f)
+    }
+
+    private val dormirRunnable = Runnable { dormir() }
+
+    private fun programarSueno() {
+        handler.removeCallbacks(dormirRunnable)
+        if (modoRobot == ModoRobot.ESTACION) handler.postDelayed(dormirRunnable, ESPERA_PARA_DORMIR_MS)
+    }
+
+    /** Ante un sismo: el robot despierta, abre el botiquín y enciende la luz interior. */
+    private fun alEmpezarSismoEnEstacion() {
+        if (modoRobot == ModoRobot.ESTACION) {
+            robotDespierto = true
+            brilloPantalla(1f)
+            handler.removeCallbacks(dormirRunnable)
+            tvBurbuja.text = "¡Sismo! Agáchate, cúbrete y sujétate. El botiquín está abierto."
+        }
+        caraRobot.expresion = CaraRobotView.Expresion.ALERTA
+        if (arduino.conectado && !puertaAbierta) abrirBotiquin(true)
+        actualizarLedExterior()
+        actualizarPanelEstacion()
+    }
+
+    private fun alTerminarSismoEnEstacion() {
+        caraRobot.expresion = CaraRobotView.Expresion.PREOCUPADO
+        tvBurbuja.text = "La sacudida terminó. Revisa si hay personas heridas. El botiquín sigue abierto."
+        actualizarPanelEstacion()
+        programarSueno()
+    }
+
+    /** Solo en compilaciones de depuración: permite simular el Arduino desde la computadora. */
+    private fun registrarSimuladorSiDepuracion() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        val receptor = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                intent.getStringExtra("linea")?.let { arduino.simularLinea(it) }
+                if (intent.hasExtra("conectado")) arduino.simularConexion(intent.getBooleanExtra("conectado", false))
+            }
+        }
+        ContextCompat.registerReceiver(
+            this, receptor, IntentFilter(ACCION_SIMULAR_ARDUINO), ContextCompat.RECEIVER_EXPORTED
+        )
+        receptorSimulador = receptor
+    }
+
     // ===================== SIGNOS VITALES =====================
 
     private fun mostrarPanel(tipo: TipoMedicion) {
@@ -696,7 +1236,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tipoActual = tipo
         medicionId = System.currentTimeMillis()
         intentoPulso = 0
-        pausarSismos()
+        actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_MEDIR_MS)
         mostrarInstrucciones(false)
         actualizarBotonesMedicion()
         if (tipo == TipoMedicion.RESPIRACION) {
@@ -745,7 +1285,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvInstruccionRespiracion.visibility = v
         imgPulso.visibility = v
         tvInstruccionPulso.visibility = v
-        if (!visibles) scrollSignos.post { scrollSignos.smoothScrollTo(0, 0) }
+        if (!visibles) scrollDeSignos().let { s -> s.post { s.smoothScrollTo(0, 0) } }
     }
 
     private fun actualizarBotonesMedicion() {
@@ -779,7 +1319,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun reanudarSismos() {
-        reanudarSismosEnMs = SystemClock.elapsedRealtime() + PAUSA_SISMOS_TRAS_MEDIR_MS
+        actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_MEDIR_MS)
+        reiniciarInactividad()
     }
 
     private fun capturar() {
@@ -865,7 +1406,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         reanudarSismos()
         // Al reaparecer las instrucciones, llevar la vista al resultado.
         val caja = if (tipoActual == TipoMedicion.RESPIRACION) cajaResultadoRespiracion else cajaResultadoPulso
-        scrollSignos.post { scrollSignos.smoothScrollTo(0, (caja.top - 40).coerceAtLeast(0)) }
+        val scroll = scrollDeSignos()
+        scroll.post {
+            val zona = Rect()
+            caja.getDrawingRect(zona)
+            scroll.offsetDescendantRectToMyCoords(caja, zona)
+            scroll.smoothScrollTo(0, (zona.top - 40).coerceAtLeast(0))
+        }
     }
 
     private fun alTerminarRespiracion() {
@@ -1052,6 +1599,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvBiometricStatus.setTextColor(c)
         ivEstadoMedicion.setImageResource(tono.icono)
         ivEstadoMedicion.imageTintList = ColorStateList.valueOf(c)
+        if (modoRobot == ModoRobot.HERRAMIENTA) {
+            tvBurbuja.text = mensaje
+            caraRobot.expresion = when (tono) {
+                Tono.PROGRESO -> CaraRobotView.Expresion.ATENTO
+                Tono.OK -> CaraRobotView.Expresion.FELIZ
+                Tono.REINTENTO, Tono.AVISO, Tono.ERROR -> CaraRobotView.Expresion.PREOCUPADO
+                Tono.NEUTRO -> CaraRobotView.Expresion.DESPIERTO
+            }
+        }
     }
 
     // ---------- Monitor en vivo ----------
@@ -1172,11 +1728,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             motor.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 // La sirena baja mientras habla la voz de alerta, para que se entienda.
                 override fun onStart(id: String?) {
-                    if (id == ID_VOZ_ALERTA) handler.post { sonidos.volumenSirena(0.25f) }
+                    handler.post {
+                        caraRobot.hablando = true
+                        if (id == ID_VOZ_ALERTA) sonidos.volumenSirena(0.25f)
+                    }
                 }
 
                 override fun onDone(id: String?) {
                     handler.post {
+                        caraRobot.hablando = false
+                        if (id == ID_VOZ_SALUDO) terminarSaludo()
                         if (id == ID_VOZ_ALERTA) sonidos.volumenSirena(1f)
                         if (id == ID_VOZ_RESULTADO) {
                             accionTrasVoz?.invoke()
@@ -1187,7 +1748,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(id: String?) {
-                    handler.post { sonidos.volumenSirena(1f) }
+                    handler.post {
+                        caraRobot.hablando = false
+                        if (id == ID_VOZ_SALUDO) terminarSaludo()
+                        sonidos.volumenSirena(1f)
+                    }
                 }
             })
         }
@@ -1355,6 +1920,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
         sonidos.detenerTodo()
+        if (::arduino.isInitialized) arduino.detener()
+        receptorSimulador?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (_: Exception) {
+                // Ignorar
+            }
+        }
         tts?.shutdown()
         tts = null
     }
@@ -1371,13 +1944,36 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             processSeismicSensor(event)
         }
 
-        // 2. CAPTURA DE MUESTRAS PARA BIOMETRÍA (los tres ejes, con su hora exacta)
+        // 2. ¿SACARON O COLOCARON EL TELÉFONO EN LA ESTACIÓN? (dirección de la gravedad)
+        if (sensorType == Sensor.TYPE_ACCELEROMETER && !isBiometricMeasuring) vigilarRetiro(event)
+
+        // 3. CAPTURA DE MUESTRAS PARA BIOMETRÍA (los tres ejes, con su hora exacta)
         if (sensorType == Sensor.TYPE_ACCELEROMETER && isBiometricMeasuring) {
             tiemposNs.add(event.timestamp)
             muestrasX.add(event.values[0])
             muestrasY.add(event.values[1])
             muestrasZ.add(event.values[2])
             alimentarMonitor(event.timestamp, event.values[0], event.values[1], event.values[2])
+        }
+    }
+
+    private fun vigilarRetiro(event: SensorEvent) {
+        if (modoRobot == ModoRobot.NINGUNO) return
+        val ahora = SystemClock.elapsedRealtime()
+        val evento = retiro.procesar(event.values[0], event.values[1], event.values[2], ahora)
+        if (modoRobot == ModoRobot.ESTACION && fijarReferenciaEnMs > 0L && ahora >= fijarReferenciaEnMs) {
+            fijarReferenciaEnMs = 0L
+            retiro.fijarReferencia()
+            return
+        }
+        when (evento) {
+            DetectorRetiro.Evento.RETIRADO -> if (modoRobot == ModoRobot.ESTACION) {
+                entrarModoHerramienta("Me sacaste de la estación. Modo primeros auxilios: elige respiración o pulso.")
+            }
+            DetectorRetiro.Evento.COLOCADO -> if (modoRobot == ModoRobot.HERRAMIENTA && !medicionActiva) {
+                entrarModoEstacion()
+            }
+            null -> Unit
         }
     }
 
@@ -1394,9 +1990,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         const val SUGERENCIA_POSICION_MS = 30_000L
         const val MONITOR_PUNTOS = 150
         const val PAUSA_SISMOS_TRAS_MEDIR_MS = 20_000L
+        const val PAUSA_SISMOS_TRAS_PESTANA_MS = 8_000L
+        const val INACTIVIDAD_SIGNOS_MS = 120_000L
         const val PREF_SONIDOS = "sonidos_activos"
         const val ID_VOZ_ALERTA = "alerta"
         const val ID_VOZ_RESULTADO = "resultado"
+        const val ID_VOZ_SALUDO = "saludo"
+        const val ESPERA_PARA_DORMIR_MS = 45_000L
+        const val ESPERA_ENTRE_SALUDOS_MS = 60_000L
+        const val ACCION_SIMULAR_ARDUINO = "com.example.detectormovimiento.SIMULAR_ARDUINO"
         const val PREF_MUJER = "respiracion_mujer"
         const val FRECUENCIA_MIN_PULSO_HZ = 40.0
         const val PERIODO_BIOMETRIA_US = 5_000 // 200 Hz

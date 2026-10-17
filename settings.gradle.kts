@@ -19,6 +19,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // usb-serial-for-android (comunicación USB con el Arduino) se publica en JitPack
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
