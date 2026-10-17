@@ -162,68 +162,6 @@
                         app:trackDecorationTint="@color/borde" />
                 </LinearLayout>
 
-                <!-- Estación: Arduino, botiquín y modo robot -->
-                <LinearLayout
-                    style="@style/Ehria.Tarjeta"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp">
-
-                    <TextView
-                        style="@style/Ehria.Etiqueta"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="ESTACIÓN · ARDUINO"
-                        android:drawableStart="@drawable/ic_botiquin" />
-
-                    <TextView
-                        android:id="@+id/tvEstacionEstado"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Sin conectar: conecta el Arduino por USB"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/texto_tenue" />
-
-                    <TextView
-                        android:id="@+id/tvEstacionDatos"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="Temperatura -- · Humedad -- · Distancia --"
-                        android:textSize="13sp"
-                        android:textColor="@color/texto_secundario" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="horizontal">
-
-                        <Button
-                            android:id="@+id/btnEstacionPuerta"
-                            style="@style/Ehria.Boton.Secundario"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="8dp"
-                            android:text="Abrir botiquín"
-                            app:icon="@drawable/ic_botiquin" />
-
-                        <Button
-                            android:id="@+id/btnModoRobot"
-                            style="@style/Ehria.Boton"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:minHeight="50dp"
-                            android:text="Modo robot"
-                            android:backgroundTint="#2563EB"
-                            app:icon="@drawable/ic_robot" />
-                    </LinearLayout>
-                </LinearLayout>
-
                 <!-- Estado y evaluación de 10 s -->
                 <LinearLayout
                     style="@style/Ehria.Tarjeta"
@@ -306,6 +244,28 @@
                         app:icon="@drawable/ic_silenciar" />
                 </LinearLayout>
 
+                <!-- Sismograma -->
+                <LinearLayout
+                    android:id="@+id/tarjetaSismograma"
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:text="SISMOGRAMA EN TIEMPO REAL"
+                        android:drawableStart="@drawable/ic_grafica" />
+
+                    <com.example.detectormovimiento.SismografoView
+                        android:id="@+id/sismografoView"
+                        android:layout_width="match_parent"
+                        android:layout_height="190dp" />
+                </LinearLayout>
+
                 <!-- Escala de Richter (estimada) -->
                 <LinearLayout
                     style="@style/Ehria.Tarjeta"
@@ -382,27 +342,6 @@
                         android:drawableStart="@drawable/ic_info"
                         android:drawablePadding="10dp"
                         android:drawableTint="#64748B" />
-                </LinearLayout>
-
-                <!-- Sismograma -->
-                <LinearLayout
-                    style="@style/Ehria.Tarjeta"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp">
-
-                    <TextView
-                        style="@style/Ehria.Etiqueta"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:text="SISMOGRAMA EN TIEMPO REAL"
-                        android:drawableStart="@drawable/ic_grafica" />
-
-                    <com.example.detectormovimiento.SismografoView
-                        android:id="@+id/sismografoView"
-                        android:layout_width="match_parent"
-                        android:layout_height="190dp" />
                 </LinearLayout>
 
                 <!-- Escala Mercalli -->
@@ -817,7 +756,313 @@
             </LinearLayout>
         </ScrollView>
 
-        <!-- ================= PESTAÑA 3: HISTORIAL ================= -->
+        <!-- ================= PESTAÑA 3: ESTACIÓN ================= -->
+        <ScrollView
+            android:id="@+id/scrollEstacion"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="16dp">
+
+                <!-- Estado de la conexión con la base -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:paddingTop="24dp"
+                    android:layout_marginBottom="14dp">
+
+                    <FrameLayout
+                        android:id="@+id/circuloEstacion"
+                        android:layout_width="76dp"
+                        android:layout_height="76dp"
+                        android:background="@drawable/fondo_circulo"
+                        android:backgroundTint="#2694A3B8">
+
+                        <ImageView
+                            android:id="@+id/ivEstacion"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_robot"
+                            android:importantForAccessibility="no"
+                            app:tint="#94A3B8" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/tvEstacionEstado"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="SIN CONECTAR"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1"
+                        android:textColor="#94A3B8" />
+
+                    <TextView
+                        android:id="@+id/tvEstacionTitulo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Coloca el teléfono en la estación"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/texto"
+                        android:gravity="center" />
+
+                    <TextView
+                        android:id="@+id/tvEstacionDetalle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Conéctalo a la base con el cable USB. La cara del robot se activa sola."
+                        android:textSize="13sp"
+                        android:lineSpacingExtra="2dp"
+                        android:textColor="@color/texto_tenue"
+                        android:gravity="center" />
+
+                    <Button
+                        android:id="@+id/btnModoRobot"
+                        style="@style/Ehria.Boton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:text="Mostrar la cara del robot"
+                        android:backgroundTint="#2563EB"
+                        app:icon="@drawable/ic_robot" />
+
+                    <Button
+                        android:id="@+id/btnModoHerramienta"
+                        style="@style/Ehria.Boton.Secundario"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Modo primeros auxilios"
+                        app:icon="@drawable/ic_corazon" />
+                </LinearLayout>
+
+                <!-- Lo que mide la base -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="AMBIENTE"
+                        android:drawableStart="@drawable/ic_termometro" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:orientation="horizontal"
+                        android:baselineAligned="false">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="8dp"
+                            android:background="@drawable/fondo_resultado"
+                            android:orientation="vertical"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="8dp"
+                            android:paddingTop="12dp"
+                            android:paddingBottom="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Temperatura"
+                                android:textSize="11sp"
+                                android:textColor="@color/texto_tenue" />
+
+                            <TextView
+                                android:id="@+id/tvEstTemp"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="--"
+                                android:textSize="24sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="8dp"
+                            android:background="@drawable/fondo_resultado"
+                            android:orientation="vertical"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="8dp"
+                            android:paddingTop="12dp"
+                            android:paddingBottom="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Humedad"
+                                android:textSize="11sp"
+                                android:textColor="@color/texto_tenue" />
+
+                            <TextView
+                                android:id="@+id/tvEstHum"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="--"
+                                android:textSize="24sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:background="@drawable/fondo_resultado"
+                            android:orientation="vertical"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="8dp"
+                            android:paddingTop="12dp"
+                            android:paddingBottom="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Se siente"
+                                android:textSize="11sp"
+                                android:textColor="@color/texto_tenue" />
+
+                            <TextView
+                                android:id="@+id/tvEstCalor"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="--"
+                                android:textSize="24sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvEstCalorConsejo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:textSize="13sp"
+                        android:textColor="#FBBF24"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvEstPresencia"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Sin datos de presencia"
+                        android:textSize="14sp"
+                        android:textColor="@color/texto_secundario"
+                        android:drawableStart="@drawable/ic_persona"
+                        android:drawablePadding="10dp"
+                        android:drawableTint="@color/texto_tenue"
+                        android:gravity="center_vertical" />
+                </LinearLayout>
+
+                <!-- Botiquín -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="BOTIQUÍN"
+                        android:drawableStart="@drawable/ic_botiquin" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:id="@+id/circuloBotiquin"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="@drawable/fondo_circulo"
+                            android:backgroundTint="#2694A3B8">
+
+                            <ImageView
+                                android:id="@+id/ivBotiquin"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_botiquin"
+                                android:importantForAccessibility="no"
+                                app:tint="#94A3B8" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="14dp"
+                            android:layout_marginEnd="8dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tvBotiquinEstado"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Cerrado"
+                                android:textSize="16sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Se abre solo ante un sismo y se ilumina por dentro."
+                                android:textSize="12sp"
+                                android:textColor="@color/texto_tenue" />
+                        </LinearLayout>
+
+                        <Button
+                            android:id="@+id/btnEstacionPuerta"
+                            style="@style/Ehria.Boton.Secundario"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Abrir" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- ================= PESTAÑA 4: HISTORIAL ================= -->
         <LinearLayout
             android:id="@+id/layoutHistorial"
             android:layout_width="match_parent"
@@ -953,237 +1198,77 @@
             android:layout_height="match_parent"
             android:orientation="horizontal">
 
-            <FrameLayout
+            <!-- La cara ocupa toda la pantalla en la estación; en modo herramienta, la mitad. -->
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1">
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingTop="20dp"
+                android:paddingBottom="14dp">
 
                 <com.example.detectormovimiento.CaraRobotView
                     android:id="@+id/caraRobot"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
                     android:contentDescription="Cara del robot EHRIA. Tócala para que te salude." />
+
+                <!-- Aparece en cuanto el suelo empieza a moverse -->
+                <com.example.detectormovimiento.SismografoView
+                    android:id="@+id/sismografoRobot"
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:layout_marginStart="56dp"
+                    android:layout_marginEnd="56dp"
+                    android:layout_marginBottom="6dp"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/tvBurbuja"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="bottom"
-                    android:layout_marginStart="24dp"
-                    android:layout_marginEnd="12dp"
-                    android:layout_marginBottom="14dp"
+                    android:layout_marginStart="48dp"
+                    android:layout_marginEnd="48dp"
                     android:gravity="center"
-                    android:maxLines="5"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    android:textSize="16sp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/texto_secundario"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tvRobotInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center"
+                    android:maxLines="1"
                     android:ellipsize="end"
                     android:textSize="13sp"
-                    android:textColor="@color/texto_secundario" />
-            </FrameLayout>
+                    android:letterSpacing="0.04"
+                    android:textColor="#64748B" />
+            </LinearLayout>
 
-            <FrameLayout
+            <!-- Modo herramienta: aquí se mueve la tarjeta de signos vitales -->
+            <ScrollView
+                android:id="@+id/scrollHerramienta"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:paddingTop="14dp"
+                android:layout_weight="1.3"
                 android:paddingEnd="20dp"
-                android:paddingBottom="10dp">
+                android:clipToPadding="false"
+                android:visibility="gone">
 
-                <!-- Panel de la estación -->
                 <LinearLayout
-                    android:id="@+id/panelEstacion"
+                    android:id="@+id/contenedorHerramienta"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:gravity="center_vertical">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="EHRIA"
-                            android:textSize="22sp"
-                            android:textStyle="bold"
-                            android:letterSpacing="0.1"
-                            android:textColor="@color/texto" />
-
-                        <TextView
-                            android:id="@+id/tvRobotArduino"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:background="@drawable/fondo_chip"
-                            android:backgroundTint="#1A94A3B8"
-                            android:paddingStart="10dp"
-                            android:paddingEnd="10dp"
-                            android:paddingTop="4dp"
-                            android:paddingBottom="4dp"
-                            android:text="Estación sin conectar"
-                            android:textSize="12sp"
-                            android:textColor="@color/texto_tenue" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/tvRobotEstado"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="Vigilando"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="#22C55E" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="horizontal"
-                        android:baselineAligned="false">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="8dp"
-                            android:background="@drawable/fondo_resultado"
-                            android:orientation="vertical"
-                            android:padding="10dp">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="TEMPERATURA"
-                                android:textSize="10sp"
-                                android:textStyle="bold"
-                                android:letterSpacing="0.08"
-                                android:textColor="@color/texto_tenue" />
-
-                            <TextView
-                                android:id="@+id/tvRobotTemp"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="--"
-                                android:textSize="26sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/texto" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="8dp"
-                            android:background="@drawable/fondo_resultado"
-                            android:orientation="vertical"
-                            android:padding="10dp">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="HUMEDAD"
-                                android:textSize="10sp"
-                                android:textStyle="bold"
-                                android:letterSpacing="0.08"
-                                android:textColor="@color/texto_tenue" />
-
-                            <TextView
-                                android:id="@+id/tvRobotHum"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="--"
-                                android:textSize="26sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/texto" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:background="@drawable/fondo_resultado"
-                            android:orientation="vertical"
-                            android:padding="10dp">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="SE SIENTE"
-                                android:textSize="10sp"
-                                android:textStyle="bold"
-                                android:letterSpacing="0.08"
-                                android:textColor="@color/texto_tenue" />
-
-                            <TextView
-                                android:id="@+id/tvRobotCalor"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="--"
-                                android:textSize="26sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/texto" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/tvRobotSismos"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:text="Hoy: sin actividad sísmica"
-                        android:textSize="14sp"
-                        android:textColor="@color/texto_secundario"
-                        android:drawableStart="@drawable/ic_nav_sismo"
-                        android:drawablePadding="8dp"
-                        android:drawableTint="@color/texto_tenue"
-                        android:gravity="center_vertical" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="horizontal">
-
-                        <Button
-                            android:id="@+id/btnRobotBotiquin"
-                            style="@style/Ehria.Boton"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="8dp"
-                            android:text="Abrir botiquín"
-                            android:backgroundTint="#334155"
-                            app:icon="@drawable/ic_botiquin" />
-
-                        <Button
-                            android:id="@+id/btnRobotHerramienta"
-                            style="@style/Ehria.Boton"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Primeros auxilios"
-                            android:backgroundTint="#BE123C"
-                            app:icon="@drawable/ic_corazon" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- Modo herramienta: aquí se mueve la tarjeta de signos vitales -->
-                <ScrollView
-                    android:id="@+id/scrollHerramienta"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:visibility="gone">
-
-                    <LinearLayout
-                        android:id="@+id/contenedorHerramienta"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingTop="40dp" />
-                </ScrollView>
-            </FrameLayout>
+                    android:paddingTop="16dp"
+                    android:paddingBottom="16dp" />
+            </ScrollView>
         </LinearLayout>
 
         <ImageView
@@ -1192,12 +1277,60 @@
             android:layout_height="44dp"
             android:layout_gravity="top|start"
             android:layout_margin="6dp"
-            android:padding="10dp"
+            android:padding="11dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:focusable="true"
             android:contentDescription="Salir del modo robot"
             android:src="@drawable/ic_cerrar"
             app:tint="#334155" />
+
+        <!-- Estado y accesos: discretos, en la esquina -->
+        <LinearLayout
+            android:id="@+id/barraRobot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvRobotEstado"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:drawableStart="@drawable/ic_punto"
+                android:drawablePadding="2dp"
+                android:drawableTint="#22C55E"
+                android:gravity="center_vertical"
+                android:text="Vigilando"
+                android:textSize="12sp"
+                android:textColor="#64748B" />
+
+            <ImageView
+                android:id="@+id/btnRobotBotiquin"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Abrir botiquín"
+                android:src="@drawable/ic_botiquin"
+                app:tint="#475569" />
+
+            <ImageView
+                android:id="@+id/btnRobotHerramienta"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Primeros auxilios: medir respiración y pulso"
+                android:src="@drawable/ic_corazon"
+                app:tint="#475569" />
+        </LinearLayout>
     </FrameLayout>
 </FrameLayout>

@@ -74,12 +74,13 @@ class CaraRobotView @JvmOverloads constructor(
         brillo.alpha = 40
 
         actualizarMirada(ahora)
-        val escala = min(w, h * 1.6f)
+        // Ojos y boca forman un bloque centrado en la vista, con margen para el brillo.
+        val escala = min(w * 0.9f, h * 1.75f)
         val anchoOjo = escala * 0.17f
         val altoOjo = escala * 0.26f
         val separacion = escala * 0.2f
         val cx = w / 2f + mirada * escala * 0.06f
-        val cyOjos = h * 0.42f
+        val cyOjos = h / 2f - altoOjo * 0.32f
 
         // Ojos
         for (lado in listOf(-1f, 1f)) {
@@ -124,7 +125,7 @@ class CaraRobotView @JvmOverloads constructor(
         }
 
         // Boca
-        val cyBoca = h * 0.78f
+        val cyBoca = cyOjos + altoOjo * 1.05f
         val anchoBoca = escala * 0.22f
         trazo.strokeWidth = escala * 0.022f
         when {
@@ -185,7 +186,7 @@ class CaraRobotView @JvmOverloads constructor(
 
     private fun actualizarMirada(ahora: Long) {
         miradaObjetivo = when (expresion) {
-            Expresion.ATENTO -> 0.8f
+            Expresion.ATENTO -> 0.35f
             Expresion.DESPIERTO -> {
                 if (ahora >= proximaMiradaMs) {
                     proximaMiradaMs = ahora + 2_500L + (Math.random() * 3_000).toLong()

@@ -40,6 +40,13 @@ class SismografoView @JvmOverloads constructor(
     /** Valor que llega al borde de la gráfica (m/s²). */
     var rango = 2.5f
 
+    /** false = sin papel milimetrado, solo la línea (para la cara del robot). */
+    var cuadricula = true
+
+    fun setGrosorLinea(dp: Float) {
+        linePaint.strokeWidth = dp * resources.displayMetrics.density
+    }
+
     fun limpiar() {
         headIndex = 0
         totalPuntosCount = 0
@@ -68,17 +75,7 @@ class SismografoView @JvmOverloads constructor(
         val centerY = height / 2f
 
         // Cuadrícula tipo papel milimetrado
-        val gridSpacing = 20f * resources.displayMetrics.density
-        var x = 0f
-        while (x < width) {
-            canvas.drawLine(x, 0f, x, height, gridPaint)
-            x += gridSpacing
-        }
-        var y = 0f
-        while (y < height) {
-            canvas.drawLine(0f, y, width, y, gridPaint)
-            y += gridSpacing
-        }
+        if (cuadricula) dibujarCuadricula(canvas, width, height)
 
         if (totalPuntosCount < 2) return
 
@@ -101,5 +98,19 @@ class SismografoView @JvmOverloads constructor(
         }
 
         canvas.drawPath(path, linePaint)
+    }
+
+    private fun dibujarCuadricula(canvas: Canvas, width: Float, height: Float) {
+        val gridSpacing = 20f * resources.displayMetrics.density
+        var x = 0f
+        while (x < width) {
+            canvas.drawLine(x, 0f, x, height, gridPaint)
+            x += gridSpacing
+        }
+        var y = 0f
+        while (y < height) {
+            canvas.drawLine(0f, y, width, y, gridPaint)
+            y += gridSpacing
+        }
     }
 }
