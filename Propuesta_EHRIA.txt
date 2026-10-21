@@ -1,0 +1,111 @@
+SISTEMA EHRIA: ESTACIONES COMUNITARIAS DE ALERTA SÍSMICA Y PRIMEROS AUXILIOS
+
+1. DESCRIPCIÓN DE LA SOLUCIÓN
+
+EHRIA convierte celulares en desuso en estaciones fijas que se instalan en escuelas, universidades y puntos de interés de la comunidad. Cada estación detecta sismos con el acelerómetro del teléfono y da la alarma. Después del evento sirve como punto de primeros auxilios: guía de pasos, medición de respiración y pulso con los propios sensores del teléfono, y registro de lo ocurrido.
+
+La problemática: Nicaragua está en una zona de alta actividad sísmica y volcánica, pero la mayoría de escuelas y barrios no tiene ningún instrumento para medir un sismo ni un punto fijo donde recibir avisos y ayuda. Los instrumentos profesionales son caros y escasos, mientras millones de celulares que sí tienen sensores de movimiento quedan guardados en cajones.
+
+Por qué la resuelve: el reto pide aprovechar los sensores de movimiento de un celular en desuso para medir lo que casi nunca se mide. EHRIA responde a las cuatro preguntas del reto:
+- Qué mide: la vibración del suelo, la intensidad del sismo en el lugar y una estimación de su magnitud. También la respiración y el pulso de una persona herida, con el acelerómetro sobre el cuerpo.
+- Dónde se instala: fijo a una columna o al piso de concreto en escuelas, universidades y puntos de interés, conectado al cargador.
+- Cómo se alimenta y se comunica: con corriente eléctrica, y la batería del teléfono como respaldo. Funciona sin internet. La red entre estaciones (Wi-Fi, datos o SMS) es la siguiente etapa.
+- Quién usa la información: la brigada escolar y el director, para decidir si evacuar o volver a entrar, y las personas que prestan primeros auxilios. Con la red, también las autoridades de gestión de riesgo y de salud.
+
+
+2. POR QUÉ ES UNA BUENA SOLUCIÓN
+
+- Costo casi nulo en sensores: el acelerómetro, la pantalla, el parlante, la batería y el procesador ya vienen en el teléfono reciclado. Solo se agrega el soporte y la instalación.
+- Recicla basura electrónica: da una segunda vida a teléfonos que terminarían en un cajón o en un vertedero.
+- Funciona sin internet: la detección, la alarma, la guía de primeros auxilios y el historial corren dentro del teléfono. Si se cae la red durante un sismo, la estación sigue funcionando.
+- No queda inútil después del sismo: primero avisa y luego ayuda, midiendo la respiración y el pulso de un herido.
+- Evita falsas alarmas: solo confirma un sismo si el movimiento se sostiene 10 segundos, y se adapta al ruido propio de cada teléfono. Un golpe o una puerta no disparan la alarma.
+- Es honesta con lo que mide: distingue la intensidad en el lugar, que un teléfono mide bien, de la magnitud, que muestra como estimación. No se presenta como dispositivo médico: sus valores vitales son orientativos.
+- Deja información para decidir: cada sismo y cada medición quedan registrados con fecha, intensidad y magnitud estimada.
+
+
+3. EN QUÉ SE DIFERENCIA DE OTRAS PROPUESTAS
+
+- MyShake (UC Berkeley) y las alertas de sismo de Android: usan el celular personal de cada usuario y dependen de que esté activo y conectado. EHRIA es un punto fijo de la comunidad, hecho con un teléfono que ya nadie usaba, y funciona sin conexión.
+- Earthquake Network: es una app colaborativa en el celular personal y no ofrece ayuda después del sismo.
+- Sistemas con sensores dedicados y sirenas, como el SASMEX de México: son muy efectivos, pero caros y lentos de desplegar. Una estación EHRIA cuesta casi nada y puede instalarse en cualquier escuela.
+- Red sismológica oficial (INETER): calcula la magnitud oficial con instrumentos de precisión. EHRIA no la reemplaza; la complementa con muchos puntos baratos de medición local y con atención en el lugar.
+- Botiquines y apps de primeros auxilios: son guías estáticas. EHRIA mide la respiración y el pulso con el acelerómetro, y vuelve a medir el pulso automáticamente si no lo detecta.
+
+Lo que hace única a la propuesta es la combinación: un celular reciclado, una estación fija comunitaria, funcionamiento sin internet y ayuda después del desastre, todo con los sensores que el teléfono ya trae.
+
+
+4. TECNOLOGÍA SELECCIONADA
+
+- Dispositivo: teléfono Android en desuso, con Android 8 o superior.
+- Sensores: acelerómetro y sensor de aceleración lineal del teléfono. Toma 50 muestras por segundo para sismos y hasta 200 para signos vitales.
+- Aplicación: nativa de Android, escrita en Kotlin con Material Design. Tiene tres pestañas: Sismos, Signos vitales e Historial.
+- Datos: el historial se guarda dentro del teléfono, sin necesidad de internet.
+- Calidad: 29 pruebas automáticas y pruebas en emulador.
+
+Algoritmos principales:
+- Detección de sismos: filtra la aceleración, aprende el ruido del teléfono durante 3 segundos y confirma el sismo solo si el movimiento se sostiene 10 segundos, tolerando pausas cortas.
+- Intensidad de Mercalli: se calcula con la aceleración máxima, usando la relación de Wald et al. (1999) que emplea el Servicio Geológico de Estados Unidos (USGS).
+- Magnitud estimada en escala de Richter: usa la ley de atenuación de Esteva (1970), suponiendo un epicentro a unos 30 km. Se muestra como aproximada, con un margen de más o menos 1 grado.
+- Respiración: el teléfono se inclina con cada respiración y la app busca el ritmo de esa señal. Va sobre el abdomen en hombres y sobre el pecho en mujeres.
+- Pulso: sobre el lado izquierdo del pecho, el acelerómetro capta la pequeña vibración de cada latido (sismocardiografía). Si el teléfono está sobre una persona y el pulso no sale claro, la app lo vuelve a medir sola hasta encontrarlo.
+
+
+5. FUNCIONAMIENTO
+
+1. Instalación: el teléfono se fija a una columna, se conecta al cargador y la app queda abierta con la pantalla siempre encendida.
+2. Calibración: al iniciar, la app mide durante 3 segundos el ruido propio del sensor.
+3. Vigilancia: la estación mide la vibración de forma continua y la muestra en un sismograma en pantalla. El estado ("Vigilando") se ve desde cualquier pestaña.
+4. Evaluación: si la vibración supera el umbral, la estación verifica durante 10 segundos que el movimiento se mantenga.
+5. Alerta: si se confirma, suena la sirena y la pantalla muestra el nivel de sacudida, la intensidad de Mercalli, la magnitud estimada y qué hacer ("agáchate, cúbrete y sujétate"). El sismo queda guardado en el historial.
+6. Después del sismo: se silencia la alarma y se usa la pestaña Signos vitales. La respiración se mide en 20 segundos y el pulso en 15, con reintentos automáticos. Mientras se mide, la detección de sismos se pausa para que el movimiento de la persona no dé falsas alarmas.
+7. Decisión: el director y la brigada consultan el historial de sismos y mediciones.
+
+
+6. NECESIDADES PARA LA IMPLEMENTACIÓN
+
+Por estación:
+- Un teléfono Android en desuso con acelerómetro funcionando y la batería en buen estado.
+- Cargador, cable y un enchufe cercano.
+- Soporte o caja fijada con tornillos o adhesivo a una columna o al piso de concreto, lejos de puertas, máquinas y paso de gente.
+- Opcional: batería externa de respaldo, parlante o sirena para espacios grandes, y un botiquín básico junto a la estación.
+
+Software:
+- Instalar la app y fijarla en pantalla (modo kiosco) para que nadie la cierre.
+- Desactivar la suspensión de pantalla.
+
+Personas:
+- Un responsable por estación (docente o brigadista) que revise que esté encendida.
+- Una capacitación breve para la brigada sobre las alertas y la medición de signos vitales.
+
+Mantenimiento:
+- Revisión periódica del funcionamiento, del estado de la batería (las baterías viejas pueden hincharse) y de la sujeción.
+- Actualización de la app.
+
+Alianzas:
+- Escuelas y Ministerio de Educación (MINED) para la instalación.
+- SINAPRED y COMUPRED para alinear las alertas con sus protocolos.
+- INETER para validar las mediciones.
+- Campañas de donación de teléfonos en desuso.
+
+
+7. ESTADO ACTUAL Y VALIDACIÓN
+
+- Prototipo funcional en Android: detección de sismos, alarma, intensidad y magnitud estimada, medición separada de respiración y pulso, historial e ilustraciones de colocación. El código está en GitHub.
+- 29 pruebas automáticas que verifican la detección, las escalas, el análisis de signos vitales y el historial.
+- Pruebas en emulador con sismos y respiración simulados, y una prueba de estrés de 5,000 acciones aleatorias sin cierres de la app.
+- Pendiente: pruebas en teléfonos reales, sobre todo la medición del pulso.
+
+
+8. LIMITACIONES Y PRÓXIMOS PASOS
+
+Limitaciones:
+- Magnitud: un solo teléfono no conoce la distancia al epicentro, así que la magnitud es una estimación con margen de más o menos 1 grado.
+- Pulso: depende de la sensibilidad de cada teléfono. Una alternativa es medirlo con la cámara y el flash.
+- Vigilancia: si la app se cierra, deja de vigilar. Hace falta un servicio que la mantenga activa en segundo plano.
+
+Próximos pasos:
+- Red entre estaciones: confirmar un sismo cuando coincidan tres o más estaciones, mostrar un mapa de intensidad y calcular mejor la magnitud.
+- Avisos oficiales: alertas de INETER (volcanes y tsunamis) y avisos de salud del MINSA en la pantalla de la estación.
+- Módulo externo con Arduino: luces, sirena, botón de emergencia y apertura del botiquín.
+- Llamadas y mensajes automáticos a los números de emergencia de la región.
