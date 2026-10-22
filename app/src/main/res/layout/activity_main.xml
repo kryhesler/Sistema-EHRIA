@@ -1059,6 +1059,161 @@
                             android:text="Abrir" />
                     </LinearLayout>
                 </LinearLayout>
+
+                <!-- Asistente de voz: el robot responde cuando le dicen "Ehria" -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ASISTENTE DE VOZ"
+                        android:drawableStart="@drawable/ic_microfono" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="8dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Escuchar «Ehria»"
+                                android:textSize="16sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+
+                            <TextView
+                                android:id="@+id/tvVozEstado"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Escucha cuando alguien se acerca a la estación."
+                                android:textSize="12sp"
+                                android:textColor="@color/texto_tenue" />
+                        </LinearLayout>
+
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/switchAsistenteVoz"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvVozEjemplos"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/fondo_resultado"
+                        android:padding="12dp"
+                        android:lineSpacingExtra="4dp"
+                        android:textSize="13sp"
+                        android:textColor="@color/texto_secundario" />
+                </LinearLayout>
+
+                <!-- Punto de encuentro: se muestra en la pantalla del robot al evacuar -->
+                <LinearLayout
+                    style="@style/Ehria.Tarjeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        style="@style/Ehria.Etiqueta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="PUNTO DE ENCUENTRO"
+                        android:drawableStart="@drawable/ic_ubicacion" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:id="@+id/circuloEncuentro"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="@drawable/fondo_circulo"
+                            android:backgroundTint="#2694A3B8">
+
+                            <ImageView
+                                android:id="@+id/ivEncuentro"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_ubicacion"
+                                android:importantForAccessibility="no"
+                                app:tint="#94A3B8" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="14dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tvEncuentroNombre"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Sin configurar"
+                                android:textSize="16sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/texto" />
+
+                            <TextView
+                                android:id="@+id/tvEncuentroDetalle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Durante la alarma y la evacuación, la pantalla del robot muestra cómo llegar."
+                                android:textSize="12sp"
+                                android:textColor="@color/texto_tenue" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/btnConfigurarEncuentro"
+                            style="@style/Ehria.Boton.Secundario"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="8dp"
+                            android:text="Configurar" />
+
+                        <Button
+                            android:id="@+id/btnVerMapa"
+                            style="@style/Ehria.Boton.Secundario"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Ver mapa" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
         </ScrollView>
 
@@ -1325,8 +1480,120 @@
                 app:icon="@drawable/ic_iniciar" />
         </LinearLayout>
 
+        <!-- Asistente: guía paso a paso, llamada simulada o ayuda. La cara se corre a la
+             izquierda para dejarle lugar. -->
+        <LinearLayout
+            android:id="@+id/panelRobot"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.95" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.05"
+                android:gravity="center_vertical"
+                android:orientation="vertical"
+                android:paddingTop="52dp"
+                android:paddingEnd="28dp"
+                android:paddingBottom="16dp">
+
+                <TextView
+                    android:id="@+id/tvPanelEtiqueta"
+                    style="@style/Ehria.Etiqueta"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:drawableStart="@drawable/ic_corazon" />
+
+                <TextView
+                    android:id="@+id/tvPanelTitulo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:fontFamily="@font/manrope_semibold"
+                    android:textSize="26sp"
+                    android:textColor="@color/texto" />
+
+                <TextView
+                    android:id="@+id/tvPanelTexto"
+                    style="@style/Ehria.Robot.Subtitulo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:maxLines="8"
+                    android:ellipsize="end"
+                    android:textSize="18sp" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/pbPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:max="100"
+                    app:trackCornerRadius="2dp"
+                    app:trackThickness="3dp"
+                    app:trackColor="#1E293B" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPanelAnterior"
+                        style="@style/Widget.Material3.Button.IconButton.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="Paso anterior"
+                        app:icon="@drawable/ic_anterior"
+                        app:iconTint="@color/texto_secundario"
+                        app:strokeColor="@color/borde" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPanelRepetir"
+                        style="@style/Widget.Material3.Button.IconButton.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:contentDescription="Repetir"
+                        app:icon="@drawable/ic_reintentar"
+                        app:iconTint="@color/texto_secundario"
+                        app:strokeColor="@color/borde" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPanelSiguiente"
+                        style="@style/Widget.Material3.Button.IconButton.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:contentDescription="Paso siguiente"
+                        app:icon="@drawable/ic_siguiente"
+                        app:iconTint="@color/texto_secundario"
+                        app:strokeColor="@color/borde" />
+
+                    <Button
+                        android:id="@+id/btnPanelCerrar"
+                        style="@style/Ehria.Robot.Segmento"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:text="Terminar"
+                        app:icon="@drawable/ic_cerrar" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
         <!-- Abajo: lo que dice el robot y una línea discreta de datos -->
         <LinearLayout
+            android:id="@+id/contenedorSubtitulos"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
@@ -1393,6 +1660,18 @@
                 android:text="Vigilando" />
 
             <ImageView
+                android:id="@+id/btnRobotMicrofono"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Hablarle al robot"
+                android:src="@drawable/ic_microfono"
+                app:tint="#475569" />
+
+            <ImageView
                 android:id="@+id/btnRobotBotiquin"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
@@ -1445,5 +1724,96 @@
                 android:text="Pulso"
                 app:icon="@drawable/ic_corazon" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <!-- Punto de encuentro: durante la alarma y la evacuación, o al preguntarlo.
+             Se cierra al tocarlo. -->
+        <LinearLayout
+            android:id="@+id/layoutMapa"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#04070D"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Mapa del punto de encuentro. Toca para cerrar."
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.2">
+
+                <com.example.detectormovimiento.MapaEncuentroView
+                    android:id="@+id/mapaEncuentro"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <ImageView
+                    android:id="@+id/ivCroquis"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:padding="16dp"
+                    android:scaleType="fitCenter"
+                    android:importantForAccessibility="no"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:orientation="vertical"
+                android:paddingStart="8dp"
+                android:paddingEnd="28dp">
+
+                <TextView
+                    style="@style/Ehria.Etiqueta"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="PUNTO DE ENCUENTRO"
+                    android:textColor="#22C55E"
+                    android:drawableStart="@drawable/ic_ubicacion"
+                    android:drawableTint="#22C55E" />
+
+                <TextView
+                    android:id="@+id/tvMapaNombre"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:fontFamily="@font/manrope_bold"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    android:textSize="30sp"
+                    android:textColor="@color/texto" />
+
+                <TextView
+                    android:id="@+id/tvMapaDireccion"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:fontFamily="@font/manrope_semibold"
+                    android:textSize="20sp"
+                    android:textColor="#4ADE80" />
+
+                <TextView
+                    android:id="@+id/tvMapaIndicaciones"
+                    style="@style/Ehria.Robot.Subtitulo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:maxLines="5"
+                    android:ellipsize="end"
+                    android:textSize="17sp" />
+
+                <TextView
+                    style="@style/Ehria.Robot.Dato"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="CAMINA SIN CORRER · NO GRITES · NO EMPUJES"
+                    android:textColor="#94A3B8" />
+            </LinearLayout>
+        </LinearLayout>
     </FrameLayout>
 </FrameLayout>

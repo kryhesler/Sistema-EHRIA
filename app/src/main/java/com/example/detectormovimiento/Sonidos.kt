@@ -22,10 +22,36 @@ class Sonidos {
     private val handler = Handler(Looper.getMainLooper())
     private val enCurso = mutableSetOf<AudioTrack>()
     private var sirena: AudioTrack? = null
+    private var metronomo: AudioTrack? = null
 
-    /** Efecto corto (respeta [efectosActivos]). */
-    fun efecto(pcm: ShortArray) {
-        if (efectosActivos) reproducir(pcm, alarma = false)
+    /** Efecto corto (respeta [efectosActivos], salvo con [forzar]: respuesta a una orden de voz). */
+    fun efecto(pcm: ShortArray, forzar: Boolean = false) {
+        if (efectosActivos || forzar) reproducir(pcm, alarma = false)
+    }
+
+    /** Marca el ritmo de la RCP en bucle hasta [detenerMetronomo]. Suena aunque los efectos estén silenciados. */
+    fun iniciarMetronomo(bpm: Int) {
+        detenerMetronomo()
+        try {
+            val pcm = SintetizadorSonidos.metronomo(bpm)
+            val pista = crear(pcm, alarma = false)
+            pista.setLoopPoints(0, pcm.size, -1)
+            pista.play()
+            metronomo = pista
+        } catch (_: Exception) {
+            metronomo = null
+        }
+    }
+
+    fun detenerMetronomo() {
+        val pista = metronomo ?: return
+        metronomo = null
+        try {
+            pista.stop()
+        } catch (_: Exception) {
+            // Ignorar
+        }
+        pista.release()
     }
 
     /** Sonido de emergencia: suena aunque los efectos estén silenciados. */
@@ -66,6 +92,7 @@ class Sonidos {
 
     fun detenerTodo() {
         detenerSirena()
+        detenerMetronomo()
         for (pista in enCurso.toList()) liberar(pista)
     }
 

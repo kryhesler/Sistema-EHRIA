@@ -51,6 +51,20 @@
         <item name="iconSize">18dp</item>
     </style>
 
+    <!-- Botón con flecha para elegir la dirección del punto de encuentro. -->
+    <style name="Ehria.Direccion" parent="Ehria.Boton.Segmento">
+        <item name="android:layout_width">64dp</item>
+        <item name="android:layout_height">52dp</item>
+        <item name="android:layout_margin">3dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingEnd">0dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:checkable">true</item>
+    </style>
+
     <!-- Título de sección con ícono a la izquierda. -->
     <style name="Ehria.Etiqueta">
         <item name="android:textSize">12sp</item>

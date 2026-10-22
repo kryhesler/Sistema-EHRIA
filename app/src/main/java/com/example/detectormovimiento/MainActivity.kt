@@ -1,5 +1,6 @@
 package com.example.detectormovimiento
 
+import android.Manifest
 import android.content.ClipData
 import android.content.BroadcastReceiver
 import android.content.ClipboardManager
@@ -8,8 +9,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -17,6 +22,8 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.usb.UsbManager
 import android.media.AudioAttributes
+import android.media.ExifInterface
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -30,12 +37,16 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.EditText
+import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -43,8 +54,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.detectormovimiento.AnalizadorVital.EstadoMedicion
+import com.example.detectormovimiento.CaraRobotView.Expresion
+import com.example.detectormovimiento.ComandosVoz.Comando
 import com.example.detectormovimiento.DetectorSismico.Fase
 import com.example.detectormovimiento.DetectorSismico.Nivel
+import com.example.detectormovimiento.GuiasPrimerosAuxilios.Guia
 import com.example.detectormovimiento.HistorialRepositorio.RegistroMedicion
 import com.example.detectormovimiento.HistorialRepositorio.RegistroSismo
 import com.example.detectormovimiento.HistorialRepositorio.TipoMedicion
@@ -53,6 +67,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -165,7 +180,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val presencia = DetectorPresencia()
     private var robotDespierto = false
     private var ultimoSaludoMs = 0L
-    private var hablandoSaludo = false
+    // El parlante hace vibrar el teléfono: mientras el robot habla o suena el metrónomo, la
+    // estación no evalúa sismos (se reanuda 1.5 s después).
+    private var parlanteOcupado = false
     private lateinit var layoutRobot: View
     private lateinit var caraRobot: CaraRobotView
     private lateinit var tvBurbuja: TextView
@@ -225,6 +242,63 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var switchDeteccion: MaterialSwitch
     private lateinit var tvDetalleDeteccion: TextView
 
+    // Asistente de voz de la estación: escucha "Ehria" y responde
+    private lateinit var escucha: EscuchaVoz
+    private var asistenteVozActivo = true
+    private var enPrimerPlano = false
+    private var microfonoPedido = false
+    /** Hasta cuándo se acepta una orden sin decir "Ehria" (tras tocar el micrófono o decir solo el nombre). */
+    private var esperandoOrdenHastaMs = 0L
+    private var respuestaPendiente: Runnable? = null
+    /** Se ejecuta cuando la voz termina la respuesta actual (en vez de volver a la cara de reposo). */
+    private var accionTrasRespuesta: (() -> Unit)? = null
+    private var ultimaRespuesta = ""
+    private var vecesNoEntendi = 0
+    private lateinit var btnRobotMicrofono: ImageView
+    private lateinit var contenedorSubtitulos: View
+    private lateinit var switchAsistenteVoz: MaterialSwitch
+    private lateinit var tvVozEstado: TextView
+    // Panel del asistente: guías paso a paso, metrónomo de la RCP, llamada simulada y ayuda
+    private lateinit var panelRobot: View
+    private lateinit var tvPanelEtiqueta: TextView
+    private lateinit var tvPanelTitulo: TextView
+    private lateinit var tvPanelTexto: TextView
+    private lateinit var pbPanel: LinearProgressIndicator
+    private lateinit var btnPanelAnterior: View
+    private lateinit var btnPanelRepetir: View
+    private lateinit var btnPanelSiguiente: View
+    private var guiaActual: Guia? = null
+    private var pasoGuia = 0
+    private var metronomoActivo = false
+    private var metronomoInicioMs = 0L
+    private var llamadaActiva = false
+    private var etapaLlamada = 0
+    // Punto de encuentro: mapa durante la alarma y la evacuación
+    private var puntoEncuentro: PuntoEncuentro? = null
+    private var evacuacionHastaMs = 0L
+    private lateinit var layoutMapa: View
+    private lateinit var mapaEncuentro: MapaEncuentroView
+    private lateinit var ivCroquis: ImageView
+    private lateinit var tvMapaNombre: TextView
+    private lateinit var tvMapaDireccion: TextView
+    private lateinit var tvMapaIndicaciones: TextView
+    private lateinit var tvEncuentroNombre: TextView
+    private lateinit var tvEncuentroDetalle: TextView
+    private lateinit var circuloEncuentro: View
+    private lateinit var ivEncuentro: ImageView
+    private var alElegirCroquis: ((Uri?) -> Unit)? = null
+
+    private val pedirMicrofono = registerForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
+        if (!concedido) {
+            Toast.makeText(this, "Sin el micrófono, el robot no puede escuchar \"Ehria\"", Toast.LENGTH_LONG).show()
+        }
+        actualizarEscucha()
+    }
+
+    private val elegirFoto = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        alElegirCroquis?.invoke(uri)
+    }
+
     /** Si se deja la pestaña de signos vitales abierta sin usar, vuelve a vigilar sismos. */
     private val inactividadRunnable = Runnable {
         if (enPestanaSignos && !medicionActiva) {
@@ -273,6 +347,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var accionTrasVoz: (() -> Unit)? = null
     private var tts: TextToSpeech? = null
     private var ttsListo = false
+    /** Lo que la voz está diciendo ahora ("tipo#número"), o null si está callada. */
+    private var vozActualId: String? = null
+    private var contadorVoz = 0
     private var medicionActiva = false
     private var medicionId = 0L
     private var intentoPulso = 0
@@ -301,6 +378,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (ultimoNivel == Nivel.LEVE) alarmaSonando = false else handler.postDelayed(this, 15_000L)
         }
     }
+
+    /**
+     * La sirena se apaga sola tras [SIRENA_MAXIMA_MS] (la voz sigue repitiendo qué hacer): la
+     * vibración del parlante puede mantener "viva" la alerta aunque el sismo ya haya terminado.
+     */
+    private val cortarSirenaRunnable = Runnable { sonidos.detenerSirena() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -427,6 +510,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             detector.restablecer()
             ultimaFase = null
             ultimoAspectoEstado = null
+            restablecerCaraTrasSismo()
         }
 
         grupoPanel.addOnButtonCheckedListener { _, id, marcado ->
@@ -565,7 +649,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun processSeismicSensor(event: SensorEvent) {
         // Con la detección apagada, durante una medición o en la pestaña de signos vitales
         // (y un rato después) el teléfono está en manos de una persona.
-        if (sismosEnPausa || hablandoSaludo) return
+        if (sismosEnPausa || parlanteOcupado) return
         if (reanudarSismosEnMs > 0L) {
             if (SystemClock.elapsedRealtime() < reanudarSismosEnMs) return
             reanudarSismosEnMs = 0L
@@ -573,9 +657,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             ultimaFase = null
             ultimoAspectoEstado = null
         }
-        val x = event.values[0]
-        val y = event.values[1]
-        val z = event.values[2]
+        // Mientras se simula un sismo (depuración), se ignora el sensor real.
+        if (SystemClock.elapsedRealtime() < sismoSimuladoHastaMs) return
+        procesarMuestraSismica(event.values[0], event.values[1], event.values[2])
+    }
+
+    private fun procesarMuestraSismica(x: Float, y: Float, z: Float) {
         val total = sqrt(x * x + y * y + z * z)
         // Sin sensor de aceleración lineal, se resta la gravedad a la magnitud.
         val magnitud = if (isLinearAvailable) total else abs(total - SensorManager.GRAVITY_EARTH)
@@ -589,6 +676,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         if (estado.alertaNueva) {
             ultimoNivel = estado.nivel
+            // Ante un sismo se dejan de lado las guías y la llamada: primero, protegerse.
+            cerrarExtrasRobot()
             iniciarAlarma()
             alEmpezarSismoEnEstacion()
             // Ante un sismo, mostrar la pestaña de sismos esté donde esté el usuario.
@@ -634,7 +723,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 alTerminarSismoEnEstacion()
                 detenerAlarma()
                 sonidos.alarma(SintetizadorSonidos.despejado())
-                handler.postDelayed({ hablarAlerta("La sacudida terminó. Revisa si hay personas heridas.") }, 900L)
+                handler.postDelayed({ hablarAlerta(mensajeFinSismo()) }, 900L)
             }
         }
     }
@@ -832,12 +921,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         // La primera indicación por voz, apenas empieza la sirena.
         handler.postDelayed(alarmaRunnable, 900L)
+        handler.removeCallbacks(cortarSirenaRunnable)
+        handler.postDelayed(cortarSirenaRunnable, SIRENA_MAXIMA_MS)
+        actualizarEscucha()
     }
 
     private fun detenerAlarma() {
         alarmaSonando = false
         handler.removeCallbacks(alarmaRunnable)
+        handler.removeCallbacks(cortarSirenaRunnable)
         sonidos.detenerSirena()
+        actualizarEscucha()
+    }
+
+    /** Lo que dice la estación cuando termina la sacudida (con el punto de encuentro, si hay). */
+    private fun mensajeFinSismo(): String {
+        val punto = puntoEncuentro ?: return "La sacudida terminó. Revisa si hay personas heridas."
+        return "La sacudida terminó. Si hay que evacuar, ve con calma al punto de encuentro: ${punto.nombre}, " +
+            "${punto.ubicacion().replaceFirstChar { it.lowercase() }}. Revisa si hay personas heridas."
     }
 
     // ===================== ESTACIÓN: ARDUINO Y MODO ROBOT =====================
@@ -899,6 +1000,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         btnEstacionPuerta.setOnClickListener { abrirBotiquin(!puertaAbierta) }
         btnRobotBotiquin.setOnClickListener { abrirBotiquin(!puertaAbierta) }
+        iniciarAsistente()
         findViewById<Button>(R.id.btnModoRobot).setOnClickListener { entrarModoEstacion() }
         findViewById<Button>(R.id.btnModoHerramienta).setOnClickListener {
             entrarModoHerramienta("Primeros auxilios. Elige respiración o pulso y te guío paso a paso.")
@@ -908,7 +1010,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         findViewById<View>(R.id.btnSalirRobot).setOnClickListener { atrasEnModoRobot() }
         caraRobot.setOnClickListener {
-            if (modoRobot == ModoRobot.ESTACION) despertar(saludar = true)
+            // Si no toca saludar (saludó hace poco), tocar la cara es como tocar el micrófono.
+            if (modoRobot == ModoRobot.ESTACION && !despertar(saludar = true) && asistenteVozActivo) escucharOrden()
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -940,6 +1043,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             ultimoModoLed = null
             actualizarLedExterior()
             arduino.enviar(ProtocoloArduino.comandoLuzInterior(puertaAbierta))
+            // El Uno se reinicia al abrir el puerto (y cierra la puerta): cuando ya arrancó,
+            // se le repite cómo debe estar todo.
+            handler.removeCallbacks(reenviarEstadoArduino)
+            handler.postDelayed(reenviarEstadoArduino, 2_500L)
             // La cabeza volvió al cuerpo: siempre modo estación. El medidor solo se usa fuera de ella.
             handler.removeCallbacks(herramientaTrasDesconexion)
             if (medicionActiva) cancelarMedicion("La estación se conectó: medición detenida.")
@@ -957,8 +1064,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    private val reenviarEstadoArduino = Runnable {
+        if (arduino.conectado) {
+            ultimoModoLed = null
+            actualizarLedExterior()
+            arduino.enviar(ProtocoloArduino.comandoLuzInterior(puertaAbierta))
+            if (puertaAbierta) arduino.enviar(ProtocoloArduino.comandoPuerta(true))
+        }
+    }
+
     private val herramientaTrasDesconexion = Runnable {
-        if (!arduino.conectado && modoRobot == ModoRobot.ESTACION) {
+        // Solo si de verdad sacaron el teléfono. Con el cable puesto fue un corte de la
+        // comunicación (por ejemplo, un bajón al mover el servo): se reconecta sola y el
+        // teléfono sigue en la pared, así que no se abre el medidor.
+        if (!arduino.conectado && !arduino.cablePuesto() && modoRobot == ModoRobot.ESTACION) {
             entrarModoHerramienta("Ya estoy fuera de la estación. Elige respiración o pulso y te guío paso a paso.")
         }
     }
@@ -1123,6 +1242,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
         if (puertaAbierta) partes += "Botiquín abierto"
+        if (::escucha.isInitialized && escucha.estado == EscuchaVoz.Estado.ESCUCHANDO) partes += "Di «Ehria»"
         tvRobotInfo.text = partes.joinToString("   ·   ")
     }
 
@@ -1147,12 +1267,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_PESTANA_MS)
         actualizarPanelEstacion()
         dormir()
+        // El micrófono se pide una sola vez, al poner la cara del robot.
+        if (asistenteVozActivo && !permisoMicrofono() && !microfonoPedido) {
+            microfonoPedido = true
+            pedirMicrofono.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        actualizarEscucha()
     }
 
     /** Cabeza fuera del cuerpo: signos vitales en horizontal, con la cara del robot. */
     private fun entrarModoHerramienta(anuncio: String) {
         // Con la estación conectada el teléfono está en la pared: no se mide a nadie.
         if (arduino.conectado) return
+        cerrarExtrasRobot()
+        terminarEvacuacion()
         modoRobot = ModoRobot.HERRAMIENTA
         mostrarCapaRobot(true)
         mostrarHerramientaRobot(true)
@@ -1165,11 +1293,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         caraRobot.expresion = CaraRobotView.Expresion.DESPIERTO
         decirEnBurbuja(anuncio)
         hablar(anuncio)
+        actualizarEscucha()
     }
 
     private fun salirModoRobot() {
         if (medicionActiva) cancelarMedicion("Medición detenida.")
+        cerrarExtrasRobot()
+        terminarEvacuacion()
         modoRobot = ModoRobot.NINGUNO
+        actualizarEscucha()
         handler.removeCallbacks(dormirRunnable)
         mostrarCapaRobot(false)
         decirEnBurbuja("")
@@ -1259,14 +1391,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     // ---------- Despertar, saludar y dormir ----------
 
-    private fun despertar(saludar: Boolean) {
+    /** Devuelve true si además saludó. */
+    private fun despertar(saludar: Boolean): Boolean {
         robotDespierto = true
         brilloPantalla(1f)
         mostrarAdornosRobot(true)
         if (caraRobot.expresion == CaraRobotView.Expresion.DORMIDO) caraRobot.expresion = CaraRobotView.Expresion.DESPIERTO
         programarSueno()
+        actualizarEscucha()
         val ahora = SystemClock.elapsedRealtime()
-        if (saludar && modoRobot == ModoRobot.ESTACION && ultimaFase != Fase.ALERTA &&
+        if (saludar && modoRobot == ModoRobot.ESTACION && ultimaFase != Fase.ALERTA && !asistenteOcupado() &&
             (ultimoSaludoMs == 0L || ahora - ultimoSaludoMs > ESPERA_ENTRE_SALUDOS_MS)
         ) {
             ultimoSaludoMs = ahora
@@ -1277,6 +1411,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     horaDelDia = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
                     sismosHoy = sismosDeHoy(),
                     deteccionActiva = deteccionActiva,
+                    asistenteVoz = asistenteVozActivo && permisoMicrofono(),
                 )
             )
             decirEnBurbuja(texto)
@@ -1284,28 +1419,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             handler.postDelayed({
                 if (caraRobot.expresion == CaraRobotView.Expresion.FELIZ) caraRobot.expresion = CaraRobotView.Expresion.DESPIERTO
             }, 1_500L)
-            // El parlante hace vibrar el teléfono: mientras saluda no se evalúan sismos.
-            if (hablar(texto, ID_VOZ_SALUDO)) {
-                hablandoSaludo = true
-                handler.postDelayed({ terminarSaludo() }, 30_000L)  // por si la voz nunca avisa
-            }
+            hablar(texto, ID_VOZ_SALUDO)
+            return true
         }
-    }
-
-    private fun terminarSaludo() {
-        if (!hablandoSaludo) return
-        hablandoSaludo = false
-        reanudarSismosEnMs = SystemClock.elapsedRealtime() + 1_500L
+        return false
     }
 
     private fun dormir() {
         if (modoRobot != ModoRobot.ESTACION || ultimaFase == Fase.ALERTA || presencia.presente) return
-        if (sismografoRobot.visibility == View.VISIBLE) return
+        if (sismografoRobot.visibility == View.VISIBLE || asistenteOcupado() || evacuando()) return
         robotDespierto = false
         caraRobot.expresion = CaraRobotView.Expresion.DORMIDO
         decirEnBurbuja("")
         mostrarAdornosRobot(false)
         brilloPantalla(0.04f)
+        actualizarEscucha()
     }
 
     /** Mientras duerme solo se ve la cara; al despertar aparecen la línea de datos y los accesos. */
@@ -1439,14 +1567,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (modoRobot == ModoRobot.ESTACION) handler.postDelayed(dormirRunnable, ESPERA_PARA_DORMIR_MS)
     }
 
-    /** Ante un sismo: el robot despierta, abre el botiquín y enciende la luz interior. */
+    /**
+     * Ante un sismo: el robot despierta, abre el botiquín y enciende la luz interior. Cada
+     * tanto, la pantalla muestra por un momento el mapa del punto de encuentro.
+     */
     private fun alEmpezarSismoEnEstacion() {
+        handler.removeCallbacks(finEvacuacionRunnable)
+        evacuacionHastaMs = 0L
         if (modoRobot == ModoRobot.ESTACION) {
             robotDespierto = true
             brilloPantalla(1f)
             handler.removeCallbacks(dormirRunnable)
             mostrarAdornosRobot(true)
             decirEnBurbuja("¡Sismo! Agáchate, cúbrete y sujétate.")
+            handler.removeCallbacks(mapaDuranteSismoRunnable)
+            handler.postDelayed(mapaDuranteSismoRunnable, PRIMER_MAPA_EN_ALARMA_MS)
         }
         caraRobot.expresion = CaraRobotView.Expresion.ALERTA
         if (arduino.conectado && !puertaAbierta) abrirBotiquin(true)
@@ -1454,11 +1589,937 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         actualizarPanelEstacion()
     }
 
+    /**
+     * Terminó la sacudida: empieza la evacuación. La cara queda preocupada y el mapa del punto
+     * de encuentro aparece cada tanto; al terminar la evacuación todo vuelve a la normalidad
+     * solo, sin que nadie toque la pantalla.
+     */
     private fun alTerminarSismoEnEstacion() {
         caraRobot.expresion = CaraRobotView.Expresion.PREOCUPADO
-        decirEnBurbuja("La sacudida terminó. Revisa si hay personas heridas.")
+        decirEnBurbuja(mensajeFinSismo())
         actualizarPanelEstacion()
+        evacuacionHastaMs = SystemClock.elapsedRealtime() + if (puntoEncuentro != null) EVACUACION_MS else ESPERA_TRAS_SISMO_MS
+        handler.removeCallbacks(finEvacuacionRunnable)
+        handler.postDelayed(finEvacuacionRunnable, evacuacionHastaMs - SystemClock.elapsedRealtime())
+        handler.removeCallbacks(mapaDuranteSismoRunnable)
+        if (modoRobot == ModoRobot.ESTACION && puntoEncuentro != null) {
+            handler.postDelayed({
+                if (evacuando()) {
+                    mostrarMapa(MAPA_AL_TERMINAR_MS)
+                    handler.postDelayed(mapaDuranteSismoRunnable, MAPA_AL_TERMINAR_MS + CARA_ENTRE_MAPAS_MS)
+                }
+            }, 900L)
+        }
+    }
+
+    private fun evacuando() = evacuacionHastaMs > 0L && SystemClock.elapsedRealtime() < evacuacionHastaMs
+
+    /** Durante la alarma y la evacuación, el mapa aparece unos segundos y vuelve la cara. */
+    private val mapaDuranteSismoRunnable = object : Runnable {
+        override fun run() {
+            if (modoRobot != ModoRobot.ESTACION || puntoEncuentro == null) return
+            val enAlerta = ultimaFase == Fase.ALERTA
+            if (!enAlerta && !evacuando()) return
+            if (!asistenteOcupado()) {
+                mostrarMapa(if (enAlerta) MAPA_EN_ALARMA_MS else MAPA_EN_EVACUACION_MS)
+            }
+            handler.postDelayed(this, if (enAlerta) MAPA_EN_ALARMA_MS + CARA_ENTRE_MAPAS_MS else MAPA_EN_EVACUACION_MS + CARA_ENTRE_MAPAS_MS)
+        }
+    }
+
+    private val finEvacuacionRunnable = Runnable { terminarEvacuacion() }
+
+    /** Vuelve a la cara de siempre: sin mapa, sin subtítulo y con el sueño programado. */
+    private fun terminarEvacuacion() {
+        val estaba = evacuacionHastaMs > 0L
+        evacuacionHastaMs = 0L
+        handler.removeCallbacks(finEvacuacionRunnable)
+        handler.removeCallbacks(mapaDuranteSismoRunnable)
+        if (!estaba || ultimaFase == Fase.ALERTA) return
+        ocultarMapa()
+        if (modoRobot != ModoRobot.ESTACION) return
+        if (!asistenteOcupado()) {
+            caraRobot.expresion = expresionReposo()
+            decirEnBurbuja("")
+        }
         programarSueno()
+    }
+
+    // ===================== ASISTENTE DE VOZ =====================
+
+    private fun iniciarAsistente() {
+        btnRobotMicrofono = findViewById(R.id.btnRobotMicrofono)
+        contenedorSubtitulos = findViewById(R.id.contenedorSubtitulos)
+        switchAsistenteVoz = findViewById(R.id.switchAsistenteVoz)
+        tvVozEstado = findViewById(R.id.tvVozEstado)
+        panelRobot = findViewById(R.id.panelRobot)
+        tvPanelEtiqueta = findViewById(R.id.tvPanelEtiqueta)
+        tvPanelTitulo = findViewById(R.id.tvPanelTitulo)
+        tvPanelTexto = findViewById(R.id.tvPanelTexto)
+        pbPanel = findViewById(R.id.pbPanel)
+        btnPanelAnterior = findViewById(R.id.btnPanelAnterior)
+        btnPanelRepetir = findViewById(R.id.btnPanelRepetir)
+        btnPanelSiguiente = findViewById(R.id.btnPanelSiguiente)
+        layoutMapa = findViewById(R.id.layoutMapa)
+        mapaEncuentro = findViewById(R.id.mapaEncuentro)
+        ivCroquis = findViewById(R.id.ivCroquis)
+        tvMapaNombre = findViewById(R.id.tvMapaNombre)
+        tvMapaDireccion = findViewById(R.id.tvMapaDireccion)
+        tvMapaIndicaciones = findViewById(R.id.tvMapaIndicaciones)
+        tvEncuentroNombre = findViewById(R.id.tvEncuentroNombre)
+        tvEncuentroDetalle = findViewById(R.id.tvEncuentroDetalle)
+        circuloEncuentro = findViewById(R.id.circuloEncuentro)
+        ivEncuentro = findViewById(R.id.ivEncuentro)
+
+        findViewById<TextView>(R.id.tvVozEjemplos).text = AsistenteEstacion.EJEMPLOS.joinToString("\n") { "«$it»" }
+        asistenteVozActivo = getPreferences(MODE_PRIVATE).getBoolean(PREF_ASISTENTE_VOZ, true)
+        switchAsistenteVoz.isChecked = asistenteVozActivo
+        switchAsistenteVoz.setOnCheckedChangeListener { _, activo ->
+            asistenteVozActivo = activo
+            getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_ASISTENTE_VOZ, activo).apply()
+            if (activo && !permisoMicrofono()) pedirMicrofono.launch(Manifest.permission.RECORD_AUDIO)
+            actualizarEscucha()
+        }
+        btnRobotMicrofono.setOnClickListener { escucharOrden() }
+        btnPanelAnterior.setOnClickListener { moverGuia(-1) }
+        btnPanelRepetir.setOnClickListener { moverGuia(0) }
+        btnPanelSiguiente.setOnClickListener { moverGuia(1) }
+        findViewById<View>(R.id.btnPanelCerrar).setOnClickListener { detenerAsistente(hablando = false) }
+        layoutMapa.setOnClickListener { ocultarMapa() }
+
+        escucha = EscuchaVoz(
+            this,
+            alOirParcial = ::alOirParcial,
+            alOirFrase = ::alOirFrase,
+            alCambiarNivel = { caraRobot.nivelVoz = it },
+            alCambiarEstado = { actualizarEstadoVoz() },
+        )
+
+        puntoEncuentro = PuntoEncuentro.cargar(getPreferences(MODE_PRIVATE))
+        findViewById<Button>(R.id.btnConfigurarEncuentro).setOnClickListener { configurarPuntoEncuentro() }
+        findViewById<Button>(R.id.btnVerMapa).setOnClickListener { verMapaPrevia() }
+        actualizarTarjetaEncuentro()
+        actualizarEstadoVoz()
+    }
+
+    private fun permisoMicrofono() =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * El robot escucha solo en la estación, despierto (alguien se acercó o tocaron la cara) y
+     * callado: mientras habla no escucha, para no oírse a sí mismo. Durante la sirena tampoco.
+     */
+    private fun actualizarEscucha() {
+        if (!::escucha.isInitialized) return
+        val escuchar = asistenteVozActivo && permisoMicrofono() && enPrimerPlano &&
+            modoRobot == ModoRobot.ESTACION && robotDespierto && vozActualId == null &&
+            !alarmaSonando && !medicionActiva
+        if (escuchar) escucha.iniciar() else escucha.detener()
+        actualizarEstadoVoz()
+    }
+
+    private val reanudarEscuchaRunnable = Runnable { actualizarEscucha() }
+
+    private fun actualizarEstadoVoz() {
+        if (!::tvVozEstado.isInitialized) return
+        val estado = if (::escucha.isInitialized) escucha.estado else EscuchaVoz.Estado.APAGADA
+        tvVozEstado.text = when {
+            !asistenteVozActivo -> "Apagado: el robot no escucha."
+            !permisoMicrofono() -> "Falta el permiso del micrófono. Apaga y enciende el interruptor para darlo."
+            estado == EscuchaVoz.Estado.NO_DISPONIBLE ->
+                "Este teléfono no tiene reconocimiento de voz. Activa la app de Google para usarlo."
+            estado == EscuchaVoz.Estado.SIN_CONEXION ->
+                "Sin internet: descarga el español para la voz sin conexión (Ajustes de Google › Voz)."
+            estado == EscuchaVoz.Estado.ESCUCHANDO -> "Escuchando: di «Ehria» y lo que necesitas."
+            else -> "Escucha cuando el robot está despierto: alguien se acerca o tocas su cara."
+        }
+        val escuchando = asistenteVozActivo && estado == EscuchaVoz.Estado.ESCUCHANDO
+        btnRobotMicrofono.visibility = if (asistenteVozActivo) View.VISIBLE else View.GONE
+        btnRobotMicrofono.imageTintList = ColorStateList.valueOf(Color.parseColor(if (escuchando) "#22D3EE" else "#475569"))
+        actualizarPanelEstacion()
+    }
+
+    /** Mientras alguien habla: si ya dijo "Ehria", la cara muestra que está escuchando. */
+    private fun alOirParcial(texto: String) {
+        if (modoRobot != ModoRobot.ESTACION || metronomoActivo) return
+        if (caraRobot.expresion != Expresion.ESCUCHANDO && ComandosVoz.escuchar(texto).llamado) {
+            caraRobot.expresion = Expresion.ESCUCHANDO
+            programarSueno()
+        }
+    }
+
+    private fun alOirFrase(frases: List<String>) {
+        if (modoRobot != ModoRobot.ESTACION) return
+        val escuchas = frases.map { ComandosVoz.escuchar(it) }
+        val llamadas = escuchas.filter { it.llamado }
+        val sinNombre = SystemClock.elapsedRealtime() < esperandoOrdenHastaMs
+        // Con el nombre vale cualquier orden. Justo después de tocar el micrófono, también sin
+        // el nombre; y durante una guía, "siguiente", "repite" o "para" sin decir el nombre.
+        var comando = llamadas.firstNotNullOfOrNull { ComandosVoz.interpretar(it.resto) }
+        if (comando == null && (sinNombre || guiaActual != null || metronomoActivo)) {
+            comando = escuchas.firstNotNullOfOrNull { ComandosVoz.interpretar(it.resto) }
+                ?.takeIf { sinNombre || it in CONTROLES_GUIA }
+        }
+        when {
+            comando != null -> {
+                esperandoOrdenHastaMs = 0L
+                vecesNoEntendi = 0
+                ejecutarComando(comando)
+            }
+            llamadas.any { it.resto.isBlank() } -> responder("¿Sí? Dime.", Expresion.ESCUCHANDO) { esperarOrden() }
+            llamadas.isNotEmpty() || (sinNombre && vecesNoEntendi == 0) -> {
+                esperandoOrdenHastaMs = 0L
+                noEntendi()
+            }
+            caraRobot.expresion == Expresion.ESCUCHANDO -> caraRobot.expresion = expresionReposo()
+        }
+    }
+
+    /** Botón del micrófono o tocar la cara: escucha una orden sin tener que decir "Ehria". */
+    private fun escucharOrden() {
+        if (modoRobot != ModoRobot.ESTACION) return
+        if (!asistenteVozActivo) {
+            Toast.makeText(this, "El asistente de voz está apagado (pestaña Estación)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!permisoMicrofono()) {
+            pedirMicrofono.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        despertar(saludar = false)
+        // Si estaba respondiendo algo, se calla para escuchar (las guías siguen).
+        if (vozActualId != null && !asistenteOcupado()) {
+            try {
+                tts?.stop()
+            } catch (_: Exception) {
+                // Ignorar
+            }
+        }
+        sonidos.efecto(SintetizadorSonidos.escuchando(), forzar = true)
+        esperarOrden()
+    }
+
+    private fun esperarOrden() {
+        esperandoOrdenHastaMs = SystemClock.elapsedRealtime() + ESPERA_ORDEN_MS
+        if (!asistenteOcupado()) {
+            caraRobot.expresion = Expresion.ESCUCHANDO
+            decirEnBurbuja("Te escucho…")
+        }
+        handler.removeCallbacks(finEsperaOrdenRunnable)
+        handler.postDelayed(finEsperaOrdenRunnable, ESPERA_ORDEN_MS)
+        programarSueno()
+        actualizarEscucha()
+    }
+
+    private val finEsperaOrdenRunnable = Runnable {
+        if (caraRobot.expresion == Expresion.ESCUCHANDO) caraRobot.expresion = expresionReposo()
+        if (textoBurbuja == "Te escucho…") decirEnBurbuja("")
+    }
+
+    private fun ejecutarComando(comando: Comando) {
+        handler.removeCallbacks(finEsperaOrdenRunnable)
+        respuestaPendiente?.let { handler.removeCallbacks(it) }
+        despertar(saludar = false)
+        val control = comando in CONTROLES_GUIA
+        // Un instante "pensando" antes de responder, para que se note que entendió.
+        if (!control && !metronomoActivo) caraRobot.expresion = Expresion.PENSANDO
+        val accion = Runnable {
+            respuestaPendiente = null
+            realizarComando(comando)
+        }
+        respuestaPendiente = accion
+        handler.postDelayed(accion, if (control) 0L else PAUSA_PENSANDO_MS)
+    }
+
+    private fun realizarComando(comando: Comando) {
+        when (comando) {
+            Comando.ABRIR_BOTIQUIN -> when {
+                !arduino.conectado ->
+                    responder("No estoy conectada a la estación, así que no puedo abrir la puerta del botiquín.", Expresion.TRISTE)
+                puertaAbierta -> responder("El botiquín ya está abierto. Toma lo que necesites.", Expresion.FELIZ)
+                else -> {
+                    abrirBotiquin(true)
+                    responder("¡Listo! Abro el botiquín. Si quieres saber cómo usar algo, pregúntame qué tiene.", Expresion.FELIZ)
+                }
+            }
+            Comando.CERRAR_BOTIQUIN -> when {
+                !arduino.conectado ->
+                    responder("No estoy conectada a la estación, así que no puedo mover la puerta del botiquín.", Expresion.TRISTE)
+                !puertaAbierta -> responder("El botiquín ya está cerrado.", Expresion.GUINO)
+                else -> {
+                    abrirBotiquin(false)
+                    responder("Cierro el botiquín. Cuidado con los dedos.", Expresion.GUINO)
+                }
+            }
+            Comando.CONTENIDO_BOTIQUIN -> iniciarGuia(GuiasPrimerosAuxilios.BOTIQUIN)
+            Comando.RCP -> iniciarGuia(GuiasPrimerosAuxilios.RCP)
+            Comando.TORNIQUETE -> iniciarGuia(GuiasPrimerosAuxilios.TORNIQUETE)
+            Comando.ATRAGANTAMIENTO -> iniciarGuia(GuiasPrimerosAuxilios.ATRAGANTAMIENTO)
+            Comando.QUEMADURA -> iniciarGuia(GuiasPrimerosAuxilios.QUEMADURA)
+            Comando.AMBULANCIA -> iniciarLlamadaSimulada()
+            Comando.PUNTO_ENCUENTRO -> {
+                val punto = puntoEncuentro
+                if (punto == null) {
+                    responder(
+                        "Todavía no tengo un punto de encuentro. La brigada puede configurarlo en la pestaña Estación de la app.",
+                        Expresion.TRISTE,
+                    )
+                } else {
+                    cerrarExtrasRobot()
+                    mostrarMapa(null)
+                    responder(punto.descripcionVoz(), Expresion.CONCENTRADO) { programarOcultarMapa(MAPA_TRAS_RESPUESTA_MS) }
+                }
+            }
+            Comando.CLIMA -> {
+                val t = ultimaLectura?.temperaturaC
+                val h = ultimaLectura?.humedad
+                val calor = t != null && h != null && AsistenteEstacion.riesgoCalor(AsistenteEstacion.indiceCalor(t, h)) != null
+                val expresion = when {
+                    t == null && h == null -> Expresion.CONFUNDIDO
+                    calor -> Expresion.CALOR
+                    else -> Expresion.FELIZ
+                }
+                responder(AsistenteEstacion.respuestaClima(t, h), expresion)
+            }
+            Comando.SISMOS -> responder(
+                AsistenteEstacion.sismos(datosAsistente()),
+                if (sismosDeHoy().isEmpty()) Expresion.FELIZ else Expresion.PREOCUPADO,
+            )
+            Comando.HORA -> {
+                val ahora = Calendar.getInstance()
+                responder(AsistenteEstacion.hora(ahora.get(Calendar.HOUR_OF_DAY), ahora.get(Calendar.MINUTE)), Expresion.FELIZ)
+            }
+            Comando.PRESENTARSE -> responder(AsistenteEstacion.PRESENTACION, Expresion.FELIZ) {
+                caraRobot.expresion = Expresion.GUINO
+                handler.postDelayed(restaurarTrasRespuestaRunnable, 1_500L)
+            }
+            Comando.AYUDA -> mostrarAyuda()
+            Comando.SALUDO -> responder("¡Hola! ¿En qué te ayudo?", Expresion.FELIZ) { esperarOrden() }
+            Comando.GRACIAS -> {
+                caraRobot.ritmoBpm = 70
+                responder("¡Con gusto! Para eso estoy.", Expresion.CORAZON)
+            }
+            Comando.DETENER -> detenerAsistente(hablando = true)
+            Comando.SIGUIENTE -> if (guiaActual != null) moverGuia(1) else noEntendi()
+            Comando.ANTERIOR -> if (guiaActual != null) moverGuia(-1) else noEntendi()
+            Comando.REPETIR -> when {
+                guiaActual != null -> moverGuia(0)
+                ultimaRespuesta.isNotEmpty() -> responder(ultimaRespuesta, Expresion.DESPIERTO)
+                else -> noEntendi()
+            }
+        }
+    }
+
+    private fun datosAsistente() = AsistenteEstacion.Datos(
+        temperaturaC = ultimaLectura?.temperaturaC,
+        humedad = ultimaLectura?.humedad,
+        horaDelDia = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
+        sismosHoy = sismosDeHoy(),
+        deteccionActiva = deteccionActiva,
+        asistenteVoz = asistenteVozActivo && permisoMicrofono(),
+    )
+
+    /**
+     * El robot contesta: subtítulo, expresión y voz. La voz suena aunque los efectos estén
+     * silenciados, porque se la pidieron. [alTerminar] corre cuando termina de hablar.
+     */
+    private fun responder(texto: String, expresion: Expresion, alTerminar: (() -> Unit)? = null) {
+        ultimaRespuesta = texto
+        handler.removeCallbacks(restaurarTrasRespuestaRunnable)
+        handler.removeCallbacks(limpiarSubtituloRunnable)
+        handler.removeCallbacks(respuestaSinVozRunnable)
+        caraRobot.expresion = expresion
+        decirEnBurbuja(texto)
+        accionTrasRespuesta = alTerminar
+        programarSueno()
+        if (!hablar(texto, ID_VOZ_ASISTENTE, forzar = true)) {
+            // Sin voz: se deja tiempo para leer el subtítulo y se sigue como si hubiera hablado.
+            handler.postDelayed(respuestaSinVozRunnable, 1_500L + texto.length * 60L)
+        }
+    }
+
+    private val respuestaSinVozRunnable = Runnable { alTerminarRespuesta() }
+
+    private fun alTerminarRespuesta() {
+        val accion = accionTrasRespuesta
+        accionTrasRespuesta = null
+        if (accion != null) accion() else handler.postDelayed(restaurarTrasRespuestaRunnable, 1_200L)
+        programarSueno()
+    }
+
+    private val restaurarTrasRespuestaRunnable = Runnable {
+        if (modoRobot == ModoRobot.ESTACION) {
+            caraRobot.expresion = expresionReposo()
+            // El subtítulo se borra un rato después, para que alcance a leerse.
+            handler.postDelayed(limpiarSubtituloRunnable, 4_000L)
+        }
+    }
+
+    private val limpiarSubtituloRunnable = Runnable {
+        if (vozActualId == null && textoBurbuja == ultimaRespuesta.trim()) decirEnBurbuja("")
+    }
+
+    private fun noEntendi() {
+        val texto = AsistenteEstacion.NO_ENTENDI[vecesNoEntendi % AsistenteEstacion.NO_ENTENDI.size]
+        vecesNoEntendi++
+        // Solo la primera vez vuelve a escuchar sin el nombre (así una charla cercana no lo
+        // deja respondiendo "no te entendí" una y otra vez).
+        responder(texto, Expresion.CONFUNDIDO, if (vecesNoEntendi == 1) ({ esperarOrden() }) else null)
+    }
+
+    /** La cara a la que vuelve el robot cuando termina de responder. */
+    private fun expresionReposo(): Expresion = when {
+        ultimaFase == Fase.ALERTA -> Expresion.ALERTA
+        metronomoActivo -> Expresion.CORAZON
+        guiaActual != null || llamadaActiva -> Expresion.CONCENTRADO
+        evacuando() -> Expresion.PREOCUPADO
+        !robotDespierto -> Expresion.DORMIDO
+        else -> Expresion.DESPIERTO
+    }
+
+    /** Hay una guía, el metrónomo, una llamada o el panel de ayuda en pantalla. */
+    private fun asistenteOcupado() = guiaActual != null || metronomoActivo || llamadaActiva ||
+        (::panelRobot.isInitialized && panelRobot.visibility == View.VISIBLE)
+
+    // ---------- Guías paso a paso y RCP ----------
+
+    private fun iniciarGuia(guia: Guia) {
+        cerrarExtrasRobot()
+        guiaActual = guia
+        pasoGuia = 0
+        decirEnBurbuja("")
+        decirPasoGuia()
+    }
+
+    private fun decirPasoGuia() {
+        val guia = guiaActual ?: return
+        handler.removeCallbacks(avanzarGuiaRunnable)
+        handler.removeCallbacks(cerrarPanelRunnable)
+        val texto = guia.pasos[pasoGuia]
+        val (color, icono) = estiloGuia(guia)
+        ponerPanel(
+            etiqueta = guia.titulo.uppercase(Locale.getDefault()),
+            color = color,
+            icono = icono,
+            titulo = if (guia == GuiasPrimerosAuxilios.BOTIQUIN) "${pasoGuia + 1} de ${guia.pasos.size}"
+            else "Paso ${pasoGuia + 1} de ${guia.pasos.size}",
+            texto = texto,
+            progreso = (pasoGuia + 1) * 100 / guia.pasos.size,
+            pasos = true,
+        )
+        caraRobot.expresion = Expresion.CONCENTRADO
+        programarSueno()
+        if (!hablar(texto, ID_VOZ_GUIA, forzar = true)) handler.postDelayed(avanzarGuiaRunnable, 2_500L + texto.length * 65L)
+    }
+
+    private fun estiloGuia(guia: Guia): Pair<String, Int> = when (guia) {
+        GuiasPrimerosAuxilios.RCP -> Pair("#F43F5E", R.drawable.ic_corazon)
+        GuiasPrimerosAuxilios.TORNIQUETE -> Pair("#F87171", R.drawable.ic_botiquin)
+        GuiasPrimerosAuxilios.ATRAGANTAMIENTO -> Pair("#38BDF8", R.drawable.ic_respiracion)
+        GuiasPrimerosAuxilios.QUEMADURA -> Pair("#F97316", R.drawable.ic_fuego)
+        else -> Pair("#22C55E", R.drawable.ic_botiquin)
+    }
+
+    private val avanzarGuiaRunnable = Runnable { moverGuia(1) }
+
+    /** -1 = paso anterior, 0 = repetir el paso, 1 = siguiente. */
+    private fun moverGuia(delta: Int) {
+        val guia = guiaActual ?: return
+        if (metronomoActivo) return
+        handler.removeCallbacks(avanzarGuiaRunnable)
+        val siguiente = pasoGuia + delta
+        if (siguiente >= guia.pasos.size) {
+            terminarPasosGuia()
+            return
+        }
+        pasoGuia = siguiente.coerceAtLeast(0)
+        decirPasoGuia()
+    }
+
+    private fun terminarPasosGuia() {
+        val guia = guiaActual ?: return
+        if (guia.metronomo) {
+            iniciarMetronomoRcp()
+        } else {
+            // El último paso queda en pantalla un rato, para poder releerlo.
+            handler.removeCallbacks(cerrarPanelRunnable)
+            handler.postDelayed(cerrarPanelRunnable, PANEL_ABIERTO_AL_TERMINAR_MS)
+        }
+    }
+
+    private val cerrarPanelRunnable = Runnable { detenerAsistente(hablando = false) }
+
+    /** Suena el ritmo de las compresiones y los ojos laten con él, hasta "Ehria, para". */
+    private fun iniciarMetronomoRcp() {
+        handler.removeCallbacks(avanzarGuiaRunnable)
+        metronomoActivo = true
+        metronomoInicioMs = SystemClock.elapsedRealtime()
+        proximoCambioRcpS = CAMBIO_REANIMADOR_S
+        sonidos.iniciarMetronomo(GuiasPrimerosAuxilios.RITMO_RCP)
+        caraRobot.ritmoBpm = GuiasPrimerosAuxilios.RITMO_RCP
+        caraRobot.expresion = Expresion.CORAZON
+        ponerPanel(
+            etiqueta = "RCP · COMPRESIONES",
+            color = "#F43F5E",
+            icono = R.drawable.ic_corazon,
+            titulo = "0:00",
+            texto = "Empuja fuerte y rápido al ritmo del sonido: unos 5 cm, 100 a 120 veces por minuto. " +
+                "Di «Ehria, para» cuando llegue ayuda o la persona respire.",
+            progreso = null,
+            pasos = false,
+        )
+        actualizarParlante()
+        handler.removeCallbacks(relojMetronomoRunnable)
+        handler.postDelayed(relojMetronomoRunnable, 1_000L)
+    }
+
+    private var proximoCambioRcpS = CAMBIO_REANIMADOR_S
+
+    private val relojMetronomoRunnable = object : Runnable {
+        override fun run() {
+            if (!metronomoActivo) return
+            val segundos = (SystemClock.elapsedRealtime() - metronomoInicioMs) / 1000L
+            tvPanelTitulo.text = String.format(Locale.getDefault(), "%d:%02d", segundos / 60, segundos % 60)
+            programarSueno()
+            if (segundos >= METRONOMO_MAXIMO_S) {
+                detenerAsistente(hablando = true)
+                return
+            }
+            // Cada 2 minutos conviene turnarse: cansado, se empuja con menos fuerza.
+            if (segundos >= proximoCambioRcpS) {
+                proximoCambioRcpS += CAMBIO_REANIMADOR_S
+                responder("Si hay alguien más, cámbiense ahora sin dejar de empujar.", Expresion.CORAZON)
+            }
+            handler.postDelayed(this, 1_000L)
+        }
+    }
+
+    // ---------- Llamada simulada y ayuda ----------
+
+    /** Simula la llamada a una ambulancia y deja claro que no se llamó de verdad. */
+    private fun iniciarLlamadaSimulada() {
+        cerrarExtrasRobot()
+        llamadaActiva = true
+        etapaLlamada = 0
+        ponerPanel(
+            etiqueta = "LLAMADA SIMULADA",
+            color = "#F43F5E",
+            icono = R.drawable.ic_telefono,
+            titulo = AsistenteEstacion.NUMERO_EMERGENCIA,
+            texto = "Llamando a una ambulancia de la ${AsistenteEstacion.NOMBRE_EMERGENCIA}…",
+            progreso = -1,
+            pasos = false,
+        )
+        responder(AsistenteEstacion.LLAMANDO, Expresion.CONCENTRADO) { handler.post(llamadaRunnable) }
+    }
+
+    private val llamadaRunnable = object : Runnable {
+        override fun run() {
+            if (!llamadaActiva) return
+            when (etapaLlamada++) {
+                0 -> {
+                    val tono = SintetizadorSonidos.tonoLlamada()
+                    sonidos.efecto(tono, forzar = true)
+                    handler.postDelayed(this, SintetizadorSonidos.duracionMs(tono) + 300L)
+                }
+                1 -> {
+                    pbPanel.visibility = View.GONE
+                    tvPanelTexto.text = "Simulación: no se hizo una llamada real. Si es una emergencia, " +
+                        "llama tú al ${AsistenteEstacion.NUMERO_EMERGENCIA} desde un teléfono."
+                    responder(AsistenteEstacion.LLAMADA_SIMULADA, Expresion.CONCENTRADO) {
+                        handler.postDelayed(cerrarPanelRunnable, PANEL_ABIERTO_AL_TERMINAR_MS)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun mostrarAyuda() {
+        cerrarExtrasRobot()
+        ponerPanel(
+            etiqueta = "PUEDES DECIRME",
+            color = "#22D3EE",
+            icono = R.drawable.ic_microfono,
+            titulo = "¿En qué te ayudo?",
+            texto = AsistenteEstacion.EJEMPLOS.take(6).joinToString("\n") { "«$it»" },
+            progreso = null,
+            pasos = false,
+        )
+        responder(AsistenteEstacion.AYUDA, Expresion.FELIZ) {
+            caraRobot.expresion = expresionReposo()
+            handler.postDelayed(cerrarPanelRunnable, PANEL_ABIERTO_AL_TERMINAR_MS)
+        }
+    }
+
+    /** [progreso]: null = sin barra, -1 = barra en movimiento (sin final). */
+    private fun ponerPanel(
+        etiqueta: String, color: String, icono: Int, titulo: String, texto: String, progreso: Int?, pasos: Boolean,
+    ) {
+        val c = Color.parseColor(color)
+        tvPanelEtiqueta.text = etiqueta
+        tvPanelEtiqueta.setTextColor(c)
+        tvPanelEtiqueta.setCompoundDrawablesRelativeWithIntrinsicBounds(icono, 0, 0, 0)
+        tvPanelEtiqueta.compoundDrawableTintList = ColorStateList.valueOf(c)
+        tvPanelTitulo.text = titulo
+        tvPanelTexto.text = texto
+        // La barra solo puede pasar a "en movimiento" mientras está oculta.
+        pbPanel.visibility = View.GONE
+        if (progreso != null) {
+            pbPanel.isIndeterminate = progreso < 0
+            if (progreso >= 0) pbPanel.progress = progreso
+            pbPanel.setIndicatorColor(c)
+            pbPanel.visibility = View.VISIBLE
+        }
+        val controles = if (pasos) View.VISIBLE else View.GONE
+        btnPanelAnterior.visibility = controles
+        btnPanelRepetir.visibility = controles
+        btnPanelSiguiente.visibility = controles
+        mostrarPanelRobot(true)
+    }
+
+    /** Con el panel abierto, la cara se corre a la izquierda y se achica un poco. */
+    private fun mostrarPanelRobot(visible: Boolean) {
+        if (visible == (panelRobot.visibility == View.VISIBLE)) return
+        panelRobot.visibility = if (visible) View.VISIBLE else View.GONE
+        contenedorSubtitulos.visibility = if (visible) View.GONE else View.VISIBLE
+        if (visible) ocultarSismografoRobot()
+        val escala = if (visible) 0.8f else 1f
+        caraRobot.animate()
+            .translationX(if (visible) -layoutRobot.width * 0.24f else 0f)
+            .scaleX(escala)
+            .scaleY(escala)
+            .setDuration(350L)
+            .start()
+    }
+
+    /** Cierra la guía, el metrónomo, la llamada, el panel y el mapa, sin decir nada. */
+    private fun cerrarExtrasRobot() {
+        if (!::panelRobot.isInitialized) return
+        handler.removeCallbacks(avanzarGuiaRunnable)
+        handler.removeCallbacks(cerrarPanelRunnable)
+        handler.removeCallbacks(llamadaRunnable)
+        handler.removeCallbacks(relojMetronomoRunnable)
+        respuestaPendiente?.let { handler.removeCallbacks(it) }
+        respuestaPendiente = null
+        accionTrasRespuesta = null
+        guiaActual = null
+        llamadaActiva = false
+        if (metronomoActivo) {
+            metronomoActivo = false
+            sonidos.detenerMetronomo()
+            actualizarParlante()
+        }
+        mostrarPanelRobot(false)
+        ocultarMapa()
+    }
+
+    /** "Ehria, para" o el botón Terminar: corta la voz, la guía, el metrónomo y la llamada. */
+    private fun detenerAsistente(hablando: Boolean) {
+        val eraRcp = metronomoActivo
+        val habiaAlgo = asistenteOcupado() || layoutMapa.visibility == View.VISIBLE || vozActualId != null
+        cerrarExtrasRobot()
+        try {
+            tts?.stop()
+        } catch (_: Exception) {
+            // Ignorar
+        }
+        when {
+            hablando && eraRcp -> responder(
+                "Muy bien. Si la persona empieza a respirar, ponla de lado y vigílala hasta que llegue ayuda.",
+                Expresion.FELIZ,
+            )
+            hablando && habiaAlgo -> responder("De acuerdo.", Expresion.DESPIERTO)
+            else -> {
+                caraRobot.expresion = expresionReposo()
+                decirEnBurbuja("")
+                programarSueno()
+            }
+        }
+    }
+
+    // ---------- Punto de encuentro ----------
+
+    /** Muestra el mapa a pantalla completa durante [ms] (null = hasta que se oculte). */
+    private fun mostrarMapa(ms: Long?) {
+        val punto = puntoEncuentro ?: return
+        if (modoRobot == ModoRobot.NINGUNO) return
+        val croquis = cargarCroquis()
+        ivCroquis.setImageBitmap(croquis)
+        ivCroquis.visibility = if (croquis != null) View.VISIBLE else View.GONE
+        mapaEncuentro.visibility = if (croquis != null) View.GONE else View.VISIBLE
+        mapaEncuentro.punto = punto
+        tvMapaNombre.text = punto.nombre.replaceFirstChar { it.uppercase() }
+        tvMapaDireccion.text = "${punto.direccion.flecha}  ${punto.ubicacion()}"
+        tvMapaIndicaciones.text = punto.indicaciones
+        tvMapaIndicaciones.visibility = if (punto.indicaciones.isBlank()) View.GONE else View.VISIBLE
+        if (layoutMapa.visibility != View.VISIBLE) {
+            layoutMapa.alpha = 0f
+            layoutMapa.visibility = View.VISIBLE
+        }
+        layoutMapa.animate().alpha(1f).setDuration(300L).start()
+        brilloPantalla(1f)
+        handler.removeCallbacks(ocultarMapaRunnable)
+        if (ms != null) handler.postDelayed(ocultarMapaRunnable, ms)
+    }
+
+    private fun programarOcultarMapa(ms: Long) {
+        handler.removeCallbacks(ocultarMapaRunnable)
+        handler.postDelayed(ocultarMapaRunnable, ms)
+    }
+
+    private val ocultarMapaRunnable = Runnable { ocultarMapa() }
+
+    private fun ocultarMapa() {
+        if (!::layoutMapa.isInitialized) return
+        handler.removeCallbacks(ocultarMapaRunnable)
+        if (layoutMapa.visibility != View.VISIBLE) return
+        layoutMapa.animate().alpha(0f).setDuration(300L).withEndAction { layoutMapa.visibility = View.GONE }.start()
+        programarSueno()
+    }
+
+    private fun actualizarTarjetaEncuentro() {
+        val punto = puntoEncuentro
+        val color = Color.parseColor(if (punto != null) "#22C55E" else "#94A3B8")
+        tvEncuentroNombre.text = punto?.nombre?.replaceFirstChar { it.uppercase() } ?: "Sin configurar"
+        tvEncuentroDetalle.text = punto?.let {
+            it.ubicacion() + if (archivoCroquis().exists()) " · con croquis" else ""
+        } ?: "Durante la alarma y la evacuación, la pantalla del robot muestra cómo llegar."
+        ivEncuentro.imageTintList = ColorStateList.valueOf(color)
+        circuloEncuentro.backgroundTintList = ColorStateList.valueOf(conAlfa(color, 0x26))
+        findViewById<Button>(R.id.btnVerMapa).isEnabled = punto != null
+    }
+
+    private fun configurarPuntoEncuentro() {
+        val vista = layoutInflater.inflate(R.layout.dialogo_punto_encuentro, null)
+        val etNombre = vista.findViewById<EditText>(R.id.etEncuentroNombre)
+        val etDistancia = vista.findViewById<EditText>(R.id.etEncuentroDistancia)
+        val etIndicaciones = vista.findViewById<EditText>(R.id.etEncuentroIndicaciones)
+        val grid = vista.findViewById<GridLayout>(R.id.gridDireccion)
+        val ivVista = vista.findViewById<ImageView>(R.id.ivCroquisVista)
+        val btnQuitar = vista.findViewById<Button>(R.id.btnQuitarCroquis)
+        val actual = puntoEncuentro
+        var direccion = actual?.direccion ?: PuntoEncuentro.Direccion.FRENTE
+        etNombre.setText(actual?.nombre.orEmpty())
+        etDistancia.setText(actual?.distanciaM?.toString().orEmpty())
+        etIndicaciones.setText(actual?.indicaciones.orEmpty())
+
+        val botones = (0 until grid.childCount).map { grid.getChildAt(it) }.filterIsInstance<MaterialButton>()
+        fun marcarDireccion() {
+            for (b in botones) b.isChecked = b.tag == direccion.name
+        }
+        for (b in botones) {
+            b.setOnClickListener {
+                direccion = PuntoEncuentro.Direccion.valueOf(b.tag as String)
+                marcarDireccion()
+            }
+        }
+        marcarDireccion()
+
+        // La foto elegida va a un archivo temporal y solo reemplaza al croquis al guardar.
+        val temporal = File(filesDir, "croquis_nuevo.jpg").also { it.delete() }
+        var quitarCroquis = false
+        fun mostrarVistaCroquis() {
+            val archivo = when {
+                temporal.exists() -> temporal
+                !quitarCroquis && archivoCroquis().exists() -> archivoCroquis()
+                else -> null
+            }
+            val imagen = archivo?.let { BitmapFactory.decodeFile(it.path) }
+            ivVista.setImageBitmap(imagen)
+            ivVista.visibility = if (imagen != null) View.VISIBLE else View.GONE
+            btnQuitar.visibility = ivVista.visibility
+        }
+        mostrarVistaCroquis()
+        alElegirCroquis = { uri ->
+            if (uri != null) {
+                if (guardarImagenReducida(uri, temporal)) {
+                    quitarCroquis = false
+                    mostrarVistaCroquis()
+                } else {
+                    Toast.makeText(this, "No se pudo abrir la foto", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        vista.findViewById<Button>(R.id.btnElegirCroquis).setOnClickListener {
+            elegirFoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
+        btnQuitar.setOnClickListener {
+            temporal.delete()
+            quitarCroquis = true
+            mostrarVistaCroquis()
+        }
+
+        val dialogo = AlertDialog.Builder(this)
+            .setTitle("Punto de encuentro")
+            .setView(vista)
+            .setPositiveButton("Guardar", null)
+            .setNegativeButton("Cancelar", null)
+            .apply { if (actual != null) setNeutralButton("Borrar", null) }
+            .create()
+        dialogo.setOnShowListener {
+            // Se valida antes de cerrar: sin nombre no se guarda.
+            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val nombre = etNombre.text.toString().trim()
+                if (nombre.isEmpty()) {
+                    etNombre.error = "Escribe el nombre del lugar"
+                    return@setOnClickListener
+                }
+                val punto = PuntoEncuentro(
+                    nombre = nombre,
+                    direccion = direccion,
+                    distanciaM = etDistancia.text.toString().toIntOrNull()?.takeIf { it > 0 },
+                    indicaciones = etIndicaciones.text.toString().trim(),
+                )
+                punto.guardar(getPreferences(MODE_PRIVATE))
+                if (temporal.exists()) {
+                    archivoCroquis().delete()
+                    temporal.renameTo(archivoCroquis())
+                } else if (quitarCroquis) {
+                    archivoCroquis().delete()
+                }
+                croquisCargado = false
+                puntoEncuentro = punto
+                actualizarTarjetaEncuentro()
+                dialogo.dismiss()
+                Toast.makeText(this, "Punto de encuentro guardado", Toast.LENGTH_SHORT).show()
+            }
+            dialogo.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
+                PuntoEncuentro.borrar(getPreferences(MODE_PRIVATE))
+                archivoCroquis().delete()
+                croquisCargado = false
+                puntoEncuentro = null
+                actualizarTarjetaEncuentro()
+                dialogo.dismiss()
+            }
+        }
+        dialogo.setOnDismissListener {
+            temporal.delete()
+            alElegirCroquis = null
+        }
+        dialogo.show()
+    }
+
+    /** Vista previa desde la pestaña Estación (sin entrar al modo robot). */
+    private fun verMapaPrevia() {
+        val punto = puntoEncuentro ?: return
+        val alto = (240 * resources.displayMetrics.density).toInt()
+        val croquis = cargarCroquis()
+        val dibujo: View = if (croquis != null) {
+            ImageView(this).apply {
+                setImageBitmap(croquis)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+        } else {
+            MapaEncuentroView(this).apply {
+                this.punto = punto
+                setBackgroundColor(Color.parseColor("#04070D"))
+            }
+        }
+        val contenedor = android.widget.FrameLayout(this).apply {
+            addView(dibujo, android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, alto))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(punto.nombre.replaceFirstChar { it.uppercase() })
+            .setMessage(punto.descripcionVoz())
+            .setView(contenedor)
+            .setPositiveButton("Cerrar", null)
+            .show()
+    }
+
+    private fun archivoCroquis() = File(filesDir, "croquis_encuentro.jpg")
+
+    private var croquis: Bitmap? = null
+    private var croquisCargado = false
+
+    private fun cargarCroquis(): Bitmap? {
+        if (!croquisCargado) {
+            croquis = archivoCroquis().takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
+            croquisCargado = true
+        }
+        return croquis
+    }
+
+    /** Copia la foto reducida (máximo ~1600 px) y derecha según su orientación EXIF. */
+    private fun guardarImagenReducida(uri: Uri, destino: File): Boolean = try {
+        val limites = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, limites) }
+        var muestra = 1
+        while (limites.outWidth / (muestra * 2) >= LADO_MAXIMO_CROQUIS || limites.outHeight / (muestra * 2) >= LADO_MAXIMO_CROQUIS) {
+            muestra *= 2
+        }
+        val giro = contentResolver.openInputStream(uri)?.use {
+            when (ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        } ?: 0f
+        val original = contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = muestra })
+        }
+        if (original == null) {
+            false
+        } else {
+            val derecha = if (giro == 0f) original else {
+                Bitmap.createBitmap(original, 0, 0, original.width, original.height, Matrix().apply { postRotate(giro) }, true)
+            }
+            destino.outputStream().use { derecha.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            true
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    // ---------- Voz: quién está hablando ----------
+
+    private fun alEmpezarVoz(id: String) {
+        vozActualId = id
+        handler.removeCallbacks(reanudarEscuchaRunnable)
+        handler.removeCallbacks(vozSinAvisoRunnable)
+        handler.postDelayed(vozSinAvisoRunnable, VOZ_MAXIMA_MS)
+        actualizarParlante()
+        actualizarEscucha()
+    }
+
+    /** Llamado por la voz al terminar ([completa]) o al cortarse una frase. */
+    private fun alTerminarVoz(id: String?, completa: Boolean) {
+        // Una frase vieja que se cortó porque empezó otra: no cambia nada.
+        if (id == null || id != vozActualId) return
+        vozActualId = null
+        handler.removeCallbacks(vozSinAvisoRunnable)
+        caraRobot.hablando = false
+        sonidos.volumenSirena(1f)
+        actualizarParlante()
+        // Un momento de silencio antes de volver a escuchar, para no oír el final de la voz.
+        handler.removeCallbacks(reanudarEscuchaRunnable)
+        handler.postDelayed(reanudarEscuchaRunnable, 400L)
+        when (id.substringBefore('#')) {
+            ID_VOZ_RESULTADO -> if (completa) {
+                accionTrasVoz?.invoke()
+                accionTrasVoz = null
+            }
+            ID_VOZ_GUIA -> if (completa) handler.postDelayed(avanzarGuiaRunnable, PAUSA_ENTRE_PASOS_MS)
+            ID_VOZ_ASISTENTE -> alTerminarRespuesta()
+        }
+    }
+
+    /** Por si la voz nunca avisa que terminó. */
+    private val vozSinAvisoRunnable = Runnable { alTerminarVoz(vozActualId, completa = false) }
+
+    private fun actualizarParlante() {
+        val tipo = vozActualId?.substringBefore('#')
+        val ocupado = modoRobot == ModoRobot.ESTACION && (metronomoActivo || tipo in VOCES_DEL_ROBOT)
+        if (parlanteOcupado && !ocupado) reanudarSismosEnMs = SystemClock.elapsedRealtime() + 1_500L
+        parlanteOcupado = ocupado
+    }
+
+    /** Si la alerta se cortó con "restablecer" o al pausar, la cara no se queda en alerta. */
+    private fun restablecerCaraTrasSismo() {
+        handler.removeCallbacks(mapaDuranteSismoRunnable)
+        if (!::layoutMapa.isInitialized) return
+        ocultarMapa()
+        if (caraRobot.expresion == Expresion.ALERTA) caraRobot.expresion = expresionReposo()
     }
 
     /** Solo en compilaciones de depuración: permite simular el Arduino desde la computadora. */
@@ -1468,12 +2529,115 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onReceive(context: Context, intent: Intent) {
                 intent.getStringExtra("linea")?.let { arduino.simularLinea(it) }
                 if (intent.hasExtra("conectado")) arduino.simularConexion(intent.getBooleanExtra("conectado", false))
+                // "27,65,80": temperatura, humedad y distancia (-1 = nadie) 4 veces por segundo,
+                // como el Arduino. "no" deja de enviar.
+                intent.getStringExtra("ambiente")?.let { simularAmbiente(it) }
+                // Una frase como si la hubieran dicho al micrófono: "ehria abre el botiquin".
+                intent.getStringExtra("decir")?.let { frase ->
+                    if (modoRobot == ModoRobot.ESTACION) {
+                        despertar(saludar = false)
+                        alOirParcial(frase)
+                        handler.postDelayed({ alOirFrase(listOf(frase)) }, 600L)
+                    }
+                }
+                // Un nombre de CaraRobotView.Expresion, o "todas" para recorrerlas.
+                intent.getStringExtra("expresion")?.let { simularExpresion(it) }
+                // "leve", "moderado" o "fuerte": sacudida sintética de [segundos] (por defecto 14).
+                intent.getStringExtra("sismo")?.let { simularSismo(it, intent.getIntExtra("segundos", 14)) }
             }
         }
         ContextCompat.registerReceiver(
             this, receptor, IntentFilter(ACCION_SIMULAR_ARDUINO), ContextCompat.RECEIVER_EXPORTED
         )
         receptorSimulador = receptor
+    }
+
+    // ---------- Simulador (solo depuración) ----------
+
+    private var sismoSimuladoHastaMs = 0L
+    private var lineaAmbienteSimulada: String? = null
+
+    private val ambienteSimuladoRunnable = object : Runnable {
+        override fun run() {
+            val linea = lineaAmbienteSimulada ?: return
+            arduino.simularLinea(linea)
+            handler.postDelayed(this, 250L)
+        }
+    }
+
+    private fun simularAmbiente(valores: String) {
+        handler.removeCallbacks(ambienteSimuladoRunnable)
+        lineaAmbienteSimulada = if (valores.equals("no", ignoreCase = true)) null else "S,$valores"
+        if (lineaAmbienteSimulada != null) handler.post(ambienteSimuladoRunnable)
+    }
+
+    private fun simularExpresion(nombre: String) {
+        if (modoRobot == ModoRobot.NINGUNO) entrarModoEstacion()
+        despertar(saludar = false)
+        handler.removeCallbacks(recorrerExpresionesRunnable)
+        if (nombre.equals("todas", ignoreCase = true)) {
+            indiceExpresionSimulada = 0
+            handler.post(recorrerExpresionesRunnable)
+            return
+        }
+        val expresion = Expresion.entries.firstOrNull { it.name.equals(nombre, ignoreCase = true) } ?: return
+        caraRobot.ritmoBpm = GuiasPrimerosAuxilios.RITMO_RCP
+        caraRobot.expresion = expresion
+        decirEnBurbuja(expresion.name)
+    }
+
+    private var indiceExpresionSimulada = 0
+
+    private val recorrerExpresionesRunnable = object : Runnable {
+        override fun run() {
+            val todas = Expresion.entries
+            if (indiceExpresionSimulada >= todas.size) {
+                caraRobot.expresion = expresionReposo()
+                decirEnBurbuja("")
+                return
+            }
+            val expresion = todas[indiceExpresionSimulada++]
+            caraRobot.ritmoBpm = GuiasPrimerosAuxilios.RITMO_RCP
+            caraRobot.expresion = expresion
+            // Para ver la boca de "escuchando" moverse.
+            if (expresion == Expresion.ESCUCHANDO) {
+                for (i in 0 until 12) handler.postDelayed({ caraRobot.nivelVoz = (0.2f + Math.random().toFloat() * 0.8f) }, i * 200L)
+            }
+            decirEnBurbuja(expresion.name)
+            programarSueno()
+            handler.postDelayed(this, 2_500L)
+        }
+    }
+
+    /** Sacudida sintética a 50 muestras por segundo, sin mover el teléfono. */
+    private fun simularSismo(nivel: String, segundos: Int) {
+        val amplitud = when (nivel.lowercase(Locale.ROOT)) {
+            "fuerte" -> 2.2f
+            "moderado" -> 0.7f
+            else -> 0.2f
+        }
+        val inicio = SystemClock.elapsedRealtime()
+        sismoSimuladoHastaMs = inicio + segundos * 1000L
+        val gravedad = if (isLinearAvailable) 0f else SensorManager.GRAVITY_EARTH
+        val paso = object : Runnable {
+            override fun run() {
+                val ahora = SystemClock.elapsedRealtime()
+                if (ahora >= sismoSimuladoHastaMs) {
+                    sismoSimuladoHastaMs = 0L
+                    return
+                }
+                val t = (ahora - inicio) / 1000.0
+                val a = amplitud * (0.7f + 0.3f * Math.random().toFloat())
+                // Con la detección apagada o en pausa, tampoco se "siente" el sismo simulado.
+                if (!sismosEnPausa) procesarMuestraSismica(
+                    (a * kotlin.math.sin(2 * Math.PI * 2.1 * t)).toFloat(),
+                    (a * 0.6 * kotlin.math.sin(2 * Math.PI * 3.3 * t + 1)).toFloat(),
+                    gravedad + (a * 0.4 * kotlin.math.sin(2 * Math.PI * 1.7 * t + 2)).toFloat(),
+                )
+                handler.postDelayed(this, 20L)
+            }
+        }
+        handler.post(paso)
     }
 
     // ===================== SIGNOS VITALES =====================
@@ -1618,6 +2782,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         finalizarSismo()
         ultimaFase = null
         ultimoAspectoEstado = null
+        restablecerCaraTrasSismo()
         ponerEstadoGlobal(R.drawable.ic_pausa, "Sismos en pausa", "#94A3B8")
     }
 
@@ -2031,15 +3196,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     /** Voz de la app (respeta el botón de silencio). Devuelve false si no se pudo hablar. */
-    private fun hablar(texto: String, id: String = "ehria"): Boolean {
-        if (!ttsListo || isBiometricMeasuring || !sonidos.efectosActivos) return false
+    /** [forzar]: suena aunque los efectos estén silenciados (respuestas a una orden de voz). */
+    private fun hablar(texto: String, id: String = "ehria", forzar: Boolean = false): Boolean {
+        if (!ttsListo || isBiometricMeasuring || (!sonidos.efectosActivos && !forzar)) return false
         return try {
             val motor = tts ?: return false
             // Durante una alarma, también por el canal de alarma para que se oiga igual de fuerte.
             motor.setAudioAttributes(atributosVoz(alarma = alarmaSonando))
             if (alarmaSonando) sonidos.volumenSirena(VOLUMEN_SIRENA_BAJO_VOZ)
             textoEnVoz = texto
-            motor.speak(texto, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.SUCCESS
+            val idUnico = "$id#${++contadorVoz}"
+            val ok = motor.speak(texto, TextToSpeech.QUEUE_FLUSH, null, idUnico) == TextToSpeech.SUCCESS
+            if (ok) alEmpezarVoz(idUnico)
+            ok
         } catch (_: Exception) {
             false
         }
@@ -2057,7 +3226,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             sonidos.volumenSirena(VOLUMEN_SIRENA_BAJO_VOZ)
             textoEnVoz = texto
             val parametros = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f) }
-            if (motor.speak(texto, TextToSpeech.QUEUE_FLUSH, parametros, ID_VOZ_ALERTA) != TextToSpeech.SUCCESS) {
+            val idUnico = "$ID_VOZ_ALERTA#${++contadorVoz}"
+            if (motor.speak(texto, TextToSpeech.QUEUE_FLUSH, parametros, idUnico) == TextToSpeech.SUCCESS) {
+                alEmpezarVoz(idUnico)
+            } else {
                 sonidos.volumenSirena(1f)
             }
         } catch (_: Exception) {
@@ -2092,24 +3264,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
 
                 override fun onDone(id: String?) {
-                    handler.post {
-                        caraRobot.hablando = false
-                        if (id == ID_VOZ_SALUDO) terminarSaludo()
-                        sonidos.volumenSirena(1f)
-                        if (id == ID_VOZ_RESULTADO) {
-                            accionTrasVoz?.invoke()
-                            accionTrasVoz = null
-                        }
-                    }
+                    handler.post { alTerminarVoz(id, completa = true) }
+                }
+
+                // Se cortó: empezó otra frase (QUEUE_FLUSH) o se pidió silencio.
+                override fun onStop(id: String?, interrupted: Boolean) {
+                    handler.post { alTerminarVoz(id, completa = false) }
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(id: String?) {
-                    handler.post {
-                        caraRobot.hablando = false
-                        if (id == ID_VOZ_SALUDO) terminarSaludo()
-                        sonidos.volumenSirena(1f)
-                    }
+                    handler.post { alTerminarVoz(id, completa = false) }
                 }
             })
         }
@@ -2258,6 +3423,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
+        enPrimerPlano = true
+        actualizarEscucha()
         linearAccelSensor?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
@@ -2271,6 +3438,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (medicionActiva) cancelarMedicion("Medición cancelada al salir de la app. Toca para empezar de nuevo.")
         sensorManager.unregisterListener(this)
         detenerAlarma()
+        enPrimerPlano = false
+        cerrarExtrasRobot()
+        actualizarEscucha()
         // Guardar lo que lleva el sismo en curso, sin cerrarlo: si la alerta sigue al volver,
         // se actualiza el mismo registro en vez de crear uno duplicado.
         sismoActual?.let { historial.guardarSismo(it) }
@@ -2280,6 +3450,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
         sonidos.detenerTodo()
+        if (::escucha.isInitialized) escucha.destruir()
         if (::arduino.isInitialized) arduino.detener()
         receptorSimulador?.let {
             try {
@@ -2333,11 +3504,35 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         const val ID_VOZ_ALERTA = "alerta"
         const val ID_VOZ_RESULTADO = "resultado"
         const val ID_VOZ_SALUDO = "saludo"
+        const val ID_VOZ_ASISTENTE = "asistente"
+        const val ID_VOZ_GUIA = "guia"
+        /** Voces del robot de la estación (no la de alerta): mientras suenan no se evalúan sismos. */
+        val VOCES_DEL_ROBOT = setOf(ID_VOZ_SALUDO, ID_VOZ_ASISTENTE, ID_VOZ_GUIA)
+        val CONTROLES_GUIA = setOf(Comando.DETENER, Comando.SIGUIENTE, Comando.ANTERIOR, Comando.REPETIR)
+        const val VOZ_MAXIMA_MS = 60_000L
+        const val ESPERA_ORDEN_MS = 10_000L
+        const val PAUSA_PENSANDO_MS = 450L
+        const val PAUSA_ENTRE_PASOS_MS = 1_200L
+        const val PANEL_ABIERTO_AL_TERMINAR_MS = 20_000L
+        const val CAMBIO_REANIMADOR_S = 120L
+        const val METRONOMO_MAXIMO_S = 1_200L
+        const val SIRENA_MAXIMA_MS = 60_000L
+        // Mapa del punto de encuentro durante la alarma y la evacuación
+        const val PRIMER_MAPA_EN_ALARMA_MS = 12_000L
+        const val MAPA_EN_ALARMA_MS = 8_000L
+        const val MAPA_EN_EVACUACION_MS = 12_000L
+        const val MAPA_AL_TERMINAR_MS = 20_000L
+        const val CARA_ENTRE_MAPAS_MS = 15_000L
+        const val MAPA_TRAS_RESPUESTA_MS = 8_000L
+        const val EVACUACION_MS = 180_000L
+        const val ESPERA_TRAS_SISMO_MS = 30_000L
+        const val LADO_MAXIMO_CROQUIS = 1_600
+        const val PREF_ASISTENTE_VOZ = "asistente_voz"
         // La sirena casi se apaga mientras habla la voz, para que las indicaciones se entiendan.
         private const val VOLUMEN_SIRENA_BAJO_VOZ = 0.12f
         const val ESPERA_PARA_DORMIR_MS = 45_000L
         // Una desconexión más corta se toma como falso contacto del cable.
-        const val ESPERA_DESCONEXION_MS = 1_500L
+        const val ESPERA_DESCONEXION_MS = 3_000L
         const val ESPERA_ENTRE_SALUDOS_MS = 60_000L
         const val ACCION_SIMULAR_ARDUINO = "com.example.detectormovimiento.SIMULAR_ARDUINO"
         const val PREF_MUJER = "respiracion_mujer"

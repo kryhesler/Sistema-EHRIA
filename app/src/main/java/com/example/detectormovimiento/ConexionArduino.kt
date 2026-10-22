@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Handler
@@ -21,6 +22,8 @@ import com.hoho.android.usbserial.util.SerialInputOutputManager
  * - Pide permiso al usuario la primera vez que se conecta.
  * - Lee línea por línea en un hilo aparte y entrega los mensajes en el hilo principal.
  * - Avisa cuando el cable se conecta o se desconecta (por ejemplo, al sacar la "cabeza").
+ * - Si la comunicación falla pero el cable sigue puesto (un bajón de voltaje al mover el
+ *   servo, por ejemplo), se reconecta sola cada pocos segundos.
  *
  * Nota: el teléfono alimenta al Arduino por el cable. El servo debe tener su propia fuente
  * de 5 V (con la tierra unida al Arduino), o se reinicia todo al moverse.
@@ -39,18 +42,25 @@ class ConexionArduino(
     private var lector: SerialInputOutputManager? = null
     private val pendiente = StringBuilder()
     private var receptorRegistrado = false
+    private var iniciada = false
 
     private val receptor = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 ACCION_PERMISO -> if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) conectar()
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> conectar()
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> desconectar()
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    // Solo si se desconectó el Arduino (no otro aparato USB).
+                    val quitado = dispositivoDe(intent)
+                    val propio = puerto?.driver?.device
+                    if (quitado == null || propio == null || quitado.deviceId == propio.deviceId) desconectar()
+                }
             }
         }
     }
 
     fun iniciar() {
+        iniciada = true
         if (!receptorRegistrado) {
             val filtro = IntentFilter().apply {
                 addAction(ACCION_PERMISO)
@@ -64,6 +74,8 @@ class ConexionArduino(
     }
 
     fun detener() {
+        iniciada = false
+        handler.removeCallbacks(reconectar)
         desconectar()
         if (receptorRegistrado) {
             try {
@@ -75,9 +87,20 @@ class ConexionArduino(
         }
     }
 
+    /**
+     * true si el cable del Arduino está puesto, aunque la comunicación se haya cortado.
+     * Sirve para saber si sacaron el teléfono de la estación o si solo hubo un error.
+     */
+    fun cablePuesto(): Boolean = try {
+        UsbSerialProber.getDefaultProber().findAllDrivers(usb).isNotEmpty()
+    } catch (_: Exception) {
+        false
+    }
+
     /** Busca un Arduino conectado; si no hay permiso, lo pide. */
     fun conectar() {
         if (conectado) return
+        handler.removeCallbacks(reconectar)
         try {
             val driver = UsbSerialProber.getDefaultProber().findAllDrivers(usb).firstOrNull() ?: return
             if (!usb.hasPermission(driver.device)) {
@@ -100,7 +123,7 @@ class ConexionArduino(
                 }
 
                 override fun onRunError(e: Exception) {
-                    handler.post { desconectar() }
+                    handler.post { desconectarPorError() }
                 }
             }).also { it.start() }
             conectado = true
@@ -108,7 +131,30 @@ class ConexionArduino(
             // El Uno se reinicia al abrir el puerto: se le pide el saludo cuando ya arrancó.
             handler.postDelayed({ enviar(ProtocoloArduino.COMANDO_SALUDO) }, 2_500L)
         } catch (_: Exception) {
-            desconectar()
+            desconectarPorError()
+        }
+    }
+
+    /** La comunicación falló: se cierra el puerto y, si el cable sigue puesto, se reintenta. */
+    private fun desconectarPorError() {
+        desconectar()
+        if (iniciada) {
+            handler.removeCallbacks(reconectar)
+            handler.postDelayed(reconectar, ESPERA_RECONEXION_MS)
+        }
+    }
+
+    private val reconectar = object : Runnable {
+        override fun run() {
+            if (!iniciada || conectado || !cablePuesto()) return
+            val driver = try {
+                UsbSerialProber.getDefaultProber().findAllDrivers(usb).firstOrNull()
+            } catch (_: Exception) {
+                null
+            }
+            // Sin permiso no se insiste (pedirlo abriría un diálogo cada pocos segundos).
+            if (driver != null && usb.hasPermission(driver.device)) conectar()
+            if (!conectado) handler.postDelayed(this, ESPERA_RECONEXION_MS)
         }
     }
 
@@ -137,7 +183,7 @@ class ConexionArduino(
         try {
             p.write(comando.toByteArray(Charsets.US_ASCII), 200)
         } catch (_: Exception) {
-            desconectar()
+            desconectarPorError()
         }
     }
 
@@ -164,7 +210,14 @@ class ConexionArduino(
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun dispositivoDe(intent: Intent): UsbDevice? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+
     companion object {
+        private const val ESPERA_RECONEXION_MS = 2_000L
         private const val ACCION_PERMISO = "com.example.detectormovimiento.PERMISO_USB"
         private const val ETIQUETA_LOG = "EhriaArduino"
     }

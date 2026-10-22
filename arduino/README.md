@@ -52,13 +52,34 @@ Todos los GND van juntos: Arduino, sensores, servo, LED y fuente externa. El con
   - amarillo pulsando rápido: verificando un movimiento;
   - rojo intenso, mitades alternadas: sismo.
 - **LED interior:** luz blanca cálida mientras la puerta del botiquín está abierta.
-- **Sacar el teléfono de la estación:** al desconectarse el cable (por más de 1.5 s), la app pasa al modo primeros auxilios para medir respiración y pulso. Al volver a conectarlo, regresa al modo estación. Mientras la estación está conectada, el medidor no se puede abrir: acomodar el teléfono en la carcasa nunca lo activa.
+- **Sacar el teléfono de la estación:** al quitar el cable (por más de 3 s), la app pasa al modo primeros auxilios para medir respiración y pulso. Al volver a conectarlo, regresa al modo estación. Mientras la estación está conectada, el medidor no se puede abrir: acomodar el teléfono en la carcasa nunca lo activa. Si solo se corta la comunicación con el cable puesto (por ejemplo, un bajón de voltaje al mover el servo), la app se reconecta sola y no cambia de modo.
+- **Asistente de voz:** con la cara del robot despierta, responde a su nombre. Ejemplos: "Ehria, abre el botiquín", "Ehria, ¿cómo hago RCP?" (guía paso a paso y luego un metrónomo a 110 por minuto), "Ehria, ¿cómo pongo un torniquete?", "Ehria, llama a una ambulancia" (llamada **simulada**: lo dice en voz alta), "Ehria, ¿dónde está el punto de encuentro?", "Ehria, ¿qué temperatura hace?", "Ehria, preséntate", "Ehria, ¿qué tiene el botiquín?". También se puede tocar el micrófono o la cara y hablar sin decir el nombre. Usa el reconocimiento de voz del teléfono: sin internet, solo funciona si está descargado el español sin conexión. Se enciende o apaga en la pestaña Estación.
+- **Punto de encuentro:** se configura en la pestaña Estación (lugar, dirección, distancia, cómo llegar y, si se quiere, una foto del croquis). Durante la alarma y los 3 minutos de evacuación, la pantalla muestra el mapa cada tanto; al terminar, la cara vuelve sola a la normalidad.
 
-## Probar sin Arduino (solo para desarrollo)
+## Probar sin Arduino ni cable OTG (solo para desarrollo)
 
-Con la app de depuración instalada, se puede simular el Arduino desde la computadora:
+Sirve un emulador de Android Studio o un teléfono conectado a la computadora con un cable USB normal y la **depuración USB** activada (Ajustes > Opciones de desarrollador).
+
+En Windows, desde la carpeta del proyecto, `herramientas\ehria.bat` hace todo con `adb` (sin argumentos muestra la ayuda):
+
+```
+herramientas\ehria.bat instalar                      compila, instala y abre la app
+herramientas\ehria.bat conectar                      cara del robot, como si estuviera en la estación
+herramientas\ehria.bat cerca                         alguien se acerca: despierta, saluda y escucha
+herramientas\ehria.bat decir "ehria abre el botiquin"
+herramientas\ehria.bat expresion todas               recorre todas las expresiones
+herramientas\ehria.bat sismo fuerte                  sismo simulado (leve, moderado o fuerte)
+herramientas\ehria.bat desconectar                   modo primeros auxilios
+```
+
+Las frases van sin tildes ni signos. En el emulador, para hablarle de verdad hay que activar *Extended controls > Microphone > Virtual microphone uses host audio input* y usar una imagen con Google Play.
+
+En Mac o Linux, las mismas órdenes con `adb`:
 
 ```
 adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --ez conectado true
-adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es linea "S,27.5,70.0,80"
+adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es ambiente 27.5,65,80
+adb shell "am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es decir 'ehria como hago rcp'"
+adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es expresion todas
+adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es sismo fuerte
 ```
