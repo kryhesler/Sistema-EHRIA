@@ -58,21 +58,21 @@ Todos los GND van juntos: Arduino, sensores, servo, LED y fuente externa. El con
 
 ## Probar sin Arduino ni cable OTG (solo para desarrollo)
 
-Sirve un emulador de Android Studio o un teléfono conectado a la computadora con un cable USB normal y la **depuración USB** activada (Ajustes > Opciones de desarrollador).
+No hace falta Android Studio: basta un teléfono Android conectado a la computadora con un cable USB normal y la **depuración USB** activada (Ajustes > Acerca del teléfono > tocar 7 veces "Número de compilación"; luego Ajustes > Opciones de desarrollador > Depuración USB).
 
-En Windows, desde la carpeta del proyecto, `herramientas\ehria.bat` hace todo con `adb` (sin argumentos muestra la ayuda):
+En Windows, descargar `ehria.bat` de la [versión de prueba](https://github.com/kryhesler/Sistema-EHRIA/releases/tag/prueba-asistente-voz) (o usar `herramientas\ehria.bat`) y ejecutarlo desde una ventana de comandos en su carpeta. La primera vez descarga `adb` de Google y la app de prueba (sin argumentos muestra la ayuda):
 
 ```
-herramientas\ehria.bat instalar                      compila, instala y abre la app
-herramientas\ehria.bat conectar                      cara del robot, como si estuviera en la estación
-herramientas\ehria.bat cerca                         alguien se acerca: despierta, saluda y escucha
-herramientas\ehria.bat decir "ehria abre el botiquin"
-herramientas\ehria.bat expresion todas               recorre todas las expresiones
-herramientas\ehria.bat sismo fuerte                  sismo simulado (leve, moderado o fuerte)
-herramientas\ehria.bat desconectar                   modo primeros auxilios
+ehria.bat instalar                      descarga, instala y abre la app en el teléfono
+ehria.bat conectar                      cara del robot, como si estuviera en la estación
+ehria.bat cerca                         alguien se acerca: despierta, saluda y escucha
+ehria.bat decir "ehria abre el botiquin"
+ehria.bat expresion todas               recorre todas las expresiones
+ehria.bat sismo fuerte                  sismo simulado (leve, moderado o fuerte)
+ehria.bat desconectar                   modo primeros auxilios
 ```
 
-Las frases van sin tildes ni signos. En el emulador, para hablarle de verdad hay que activar *Extended controls > Microphone > Virtual microphone uses host audio input* y usar una imagen con Google Play.
+Las frases van sin tildes ni signos. Con el teléfono también se le puede hablar de verdad al micrófono. Si `instalar` dice `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, la app del teléfono se instaló desde otra computadora: `ehria.bat reinstalar` la borra (con su historial) y la instala de nuevo.
 
 En Mac o Linux, las mismas órdenes con `adb`:
 
