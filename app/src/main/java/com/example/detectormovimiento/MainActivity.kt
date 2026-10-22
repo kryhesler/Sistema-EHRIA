@@ -180,9 +180,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val presencia = DetectorPresencia()
     private var robotDespierto = false
     private var ultimoSaludoMs = 0L
-    // El parlante hace vibrar el teléfono: mientras el robot habla o suena el metrónomo, la
-    // estación no evalúa sismos (se reanuda 1.5 s después).
-    private var parlanteOcupado = false
+    // El parlante hace vibrar el teléfono: mientras suena (sirena, voz, efectos, metrónomo)
+    // las muestras no se usan para detectar sismos. Hasta cuándo se considera que la voz suena.
+    private var finVozMs = 0L
     private lateinit var layoutRobot: View
     private lateinit var caraRobot: CaraRobotView
     private lateinit var tvBurbuja: TextView
@@ -649,7 +649,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun processSeismicSensor(event: SensorEvent) {
         // Con la detección apagada, durante una medición o en la pestaña de signos vitales
         // (y un rato después) el teléfono está en manos de una persona.
-        if (sismosEnPausa || parlanteOcupado) return
+        if (sismosEnPausa) return
         if (reanudarSismosEnMs > 0L) {
             if (SystemClock.elapsedRealtime() < reanudarSismosEnMs) return
             reanudarSismosEnMs = 0L
@@ -659,6 +659,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         // Mientras se simula un sismo (depuración), se ignora el sensor real.
         if (SystemClock.elapsedRealtime() < sismoSimuladoHastaMs) return
+        // La sirena, la voz y los sonidos hacen vibrar el teléfono: eso no es un sismo.
+        if (parlanteSonando()) {
+            detector.omitir(SystemClock.elapsedRealtime())
+            return
+        }
         procesarMuestraSismica(event.values[0], event.values[1], event.values[2])
     }
 
@@ -1026,6 +1031,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         })
 
         arduino = ConexionArduino(this, ::alMensajeArduino, ::alCambiarConexion)
+        // App de prueba: también acepta el Arduino conectado a la computadora (ehria.bat puente).
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) arduino.puertoPuente = PUERTO_PUENTE
         arduino.iniciar()
         registrarSimuladorSiDepuracion()
         actualizarTarjetaEstacion()
@@ -1573,6 +1580,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      */
     private fun alEmpezarSismoEnEstacion() {
         handler.removeCallbacks(finEvacuacionRunnable)
+        handler.removeCallbacks(caraTrasSismoRunnable)
         evacuacionHastaMs = 0L
         if (modoRobot == ModoRobot.ESTACION) {
             robotDespierto = true
@@ -1590,13 +1598,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     /**
-     * Terminó la sacudida: empieza la evacuación. La cara queda preocupada y el mapa del punto
-     * de encuentro aparece cada tanto; al terminar la evacuación todo vuelve a la normalidad
-     * solo, sin que nadie toque la pantalla.
+     * Terminó la sacudida: empieza la evacuación. La cara queda preocupada un momento y vuelve
+     * sola a la normalidad; el mapa del punto de encuentro sigue apareciendo cada tanto hasta
+     * que termina la evacuación. Nadie tiene que tocar la pantalla.
      */
     private fun alTerminarSismoEnEstacion() {
         caraRobot.expresion = CaraRobotView.Expresion.PREOCUPADO
         decirEnBurbuja(mensajeFinSismo())
+        handler.removeCallbacks(caraTrasSismoRunnable)
+        handler.postDelayed(caraTrasSismoRunnable, CARA_PREOCUPADA_MS)
         actualizarPanelEstacion()
         evacuacionHastaMs = SystemClock.elapsedRealtime() + if (puntoEncuentro != null) EVACUACION_MS else ESPERA_TRAS_SISMO_MS
         handler.removeCallbacks(finEvacuacionRunnable)
@@ -1628,6 +1638,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private val finEvacuacionRunnable = Runnable { terminarEvacuacion() }
+
+    private val caraTrasSismoRunnable = Runnable {
+        if (ultimaFase == Fase.ALERTA) return@Runnable
+        if (caraRobot.expresion == Expresion.PREOCUPADO) caraRobot.expresion = expresionReposo()
+        if (textoBurbuja == mensajeFinSismo().trim()) decirEnBurbuja("")
+        programarSueno()
+    }
 
     /** Vuelve a la cara de siempre: sin mapa, sin subtítulo y con el sueño programado. */
     private fun terminarEvacuacion() {
@@ -1972,7 +1989,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ultimaFase == Fase.ALERTA -> Expresion.ALERTA
         metronomoActivo -> Expresion.CORAZON
         guiaActual != null || llamadaActiva -> Expresion.CONCENTRADO
-        evacuando() -> Expresion.PREOCUPADO
         !robotDespierto -> Expresion.DORMIDO
         else -> Expresion.DESPIERTO
     }
@@ -2068,7 +2084,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             progreso = null,
             pasos = false,
         )
-        actualizarParlante()
         handler.removeCallbacks(relojMetronomoRunnable)
         handler.postDelayed(relojMetronomoRunnable, 1_000L)
     }
@@ -2207,7 +2222,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (metronomoActivo) {
             metronomoActivo = false
             sonidos.detenerMetronomo()
-            actualizarParlante()
         }
         mostrarPanelRobot(false)
         ocultarMapa()
@@ -2478,7 +2492,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         handler.removeCallbacks(reanudarEscuchaRunnable)
         handler.removeCallbacks(vozSinAvisoRunnable)
         handler.postDelayed(vozSinAvisoRunnable, VOZ_MAXIMA_MS)
-        actualizarParlante()
         actualizarEscucha()
     }
 
@@ -2487,10 +2500,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Una frase vieja que se cortó porque empezó otra: no cambia nada.
         if (id == null || id != vozActualId) return
         vozActualId = null
+        finVozMs = SystemClock.elapsedRealtime() + MARGEN_VIBRACION_VOZ_MS
         handler.removeCallbacks(vozSinAvisoRunnable)
         caraRobot.hablando = false
         sonidos.volumenSirena(1f)
-        actualizarParlante()
         // Un momento de silencio antes de volver a escuchar, para no oír el final de la voz.
         handler.removeCallbacks(reanudarEscuchaRunnable)
         handler.postDelayed(reanudarEscuchaRunnable, 400L)
@@ -2507,12 +2520,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     /** Por si la voz nunca avisa que terminó. */
     private val vozSinAvisoRunnable = Runnable { alTerminarVoz(vozActualId, completa = false) }
 
-    private fun actualizarParlante() {
-        val tipo = vozActualId?.substringBefore('#')
-        val ocupado = modoRobot == ModoRobot.ESTACION && (metronomoActivo || tipo in VOCES_DEL_ROBOT)
-        if (parlanteOcupado && !ocupado) reanudarSismosEnMs = SystemClock.elapsedRealtime() + 1_500L
-        parlanteOcupado = ocupado
-    }
+    /** true mientras sale sonido del parlante (o acaba de salir: la vibración tarda en apagarse). */
+    private fun parlanteSonando() =
+        vozActualId != null || SystemClock.elapsedRealtime() < finVozMs || sonidos.sonando()
 
     /** Si la alerta se cortó con "restablecer" o al pausar, la cara no se queda en alerta. */
     private fun restablecerCaraTrasSismo() {
@@ -3506,8 +3516,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         const val ID_VOZ_SALUDO = "saludo"
         const val ID_VOZ_ASISTENTE = "asistente"
         const val ID_VOZ_GUIA = "guia"
-        /** Voces del robot de la estación (no la de alerta): mientras suenan no se evalúan sismos. */
-        val VOCES_DEL_ROBOT = setOf(ID_VOZ_SALUDO, ID_VOZ_ASISTENTE, ID_VOZ_GUIA)
         val CONTROLES_GUIA = setOf(Comando.DETENER, Comando.SIGUIENTE, Comando.ANTERIOR, Comando.REPETIR)
         const val VOZ_MAXIMA_MS = 60_000L
         const val ESPERA_ORDEN_MS = 10_000L
@@ -3525,7 +3533,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         const val CARA_ENTRE_MAPAS_MS = 15_000L
         const val MAPA_TRAS_RESPUESTA_MS = 8_000L
         const val EVACUACION_MS = 180_000L
-        const val ESPERA_TRAS_SISMO_MS = 30_000L
+        const val ESPERA_TRAS_SISMO_MS = 20_000L
+        /** Cuánto dura la cara preocupada después de un sismo. */
+        const val CARA_PREOCUPADA_MS = 20_000L
+        const val MARGEN_VIBRACION_VOZ_MS = 400L
         const val LADO_MAXIMO_CROQUIS = 1_600
         const val PREF_ASISTENTE_VOZ = "asistente_voz"
         // La sirena casi se apaga mientras habla la voz, para que las indicaciones se entiendan.
@@ -3535,6 +3546,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         const val ESPERA_DESCONEXION_MS = 3_000L
         const val ESPERA_ENTRE_SALUDOS_MS = 60_000L
         const val ACCION_SIMULAR_ARDUINO = "com.example.detectormovimiento.SIMULAR_ARDUINO"
+        /** Debe coincidir con herramientas/puente.ps1 y el "adb reverse" de ehria.bat. */
+        const val PUERTO_PUENTE = 8777
         const val PREF_MUJER = "respiracion_mujer"
         const val FRECUENCIA_MIN_PULSO_HZ = 40.0
         const val PERIODO_BIOMETRIA_US = 5_000 // 200 Hz

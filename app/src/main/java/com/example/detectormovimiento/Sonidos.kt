@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 
 /**
  * Reproduce los sonidos generados por [SintetizadorSonidos].
@@ -23,6 +24,22 @@ class Sonidos {
     private val enCurso = mutableSetOf<AudioTrack>()
     private var sirena: AudioTrack? = null
     private var metronomo: AudioTrack? = null
+    // Para saber cuándo suena el parlante (su vibración se confunde con un sismo).
+    private var finEfectosMs = 0L
+    private var inicioSirenaMs = 0L
+    private var periodoSirenaMs = 1L
+    private var audibleSirenaMs = 0L
+
+    /**
+     * true si el parlante está sonando o acaba de sonar (la vibración tarda un momento en
+     * apagarse). La sirena tiene pausas: en ellas devuelve false y se puede medir.
+     */
+    fun sonando(ahora: Long = SystemClock.uptimeMillis()): Boolean {
+        if (ahora < finEfectosMs || metronomo != null) return true
+        if (sirena == null) return false
+        val fase = (ahora - inicioSirenaMs) % periodoSirenaMs
+        return fase < audibleSirenaMs + MARGEN_VIBRACION_MS || fase > periodoSirenaMs - ANTES_DE_SONAR_MS
+    }
 
     /** Efecto corto (respeta [efectosActivos], salvo con [forzar]: respuesta a una orden de voz). */
     fun efecto(pcm: ShortArray, forzar: Boolean = false) {
@@ -60,11 +77,16 @@ class Sonidos {
     fun iniciarSirena(rapida: Boolean) {
         detenerSirena()
         try {
-            val pcm = SintetizadorSonidos.sirena(if (rapida) 700 else 1_400)
+            val cicloMs = if (rapida) 700 else 1_400
+            val ciclos = SIRENA_AUDIBLE_MS / cicloMs
+            val pcm = SintetizadorSonidos.sirenaConPausa(cicloMs, ciclos, SIRENA_PAUSA_MS)
             val pista = crear(pcm, alarma = true)
             pista.setLoopPoints(0, pcm.size, -1)
             pista.play()
             sirena = pista
+            inicioSirenaMs = SystemClock.uptimeMillis()
+            periodoSirenaMs = SintetizadorSonidos.duracionMs(pcm)
+            audibleSirenaMs = (ciclos * cicloMs).toLong()
         } catch (_: Exception) {
             sirena = null
         }
@@ -101,6 +123,7 @@ class Sonidos {
             val pista = crear(pcm, alarma)
             enCurso += pista
             pista.play()
+            finEfectosMs = maxOf(finEfectosMs, SystemClock.uptimeMillis() + SintetizadorSonidos.duracionMs(pcm) + MARGEN_VIBRACION_MS)
             handler.postDelayed({ liberar(pista) }, SintetizadorSonidos.duracionMs(pcm) + 300L)
         } catch (_: Exception) {
             // Sin audio: la información sigue en pantalla
@@ -115,6 +138,14 @@ class Sonidos {
             // Ignorar
         }
         pista.release()
+    }
+
+    private companion object {
+        /** La sirena suena unos 4 s y calla 1.6 s, una y otra vez. */
+        const val SIRENA_AUDIBLE_MS = 4_200
+        const val SIRENA_PAUSA_MS = 1_600
+        const val MARGEN_VIBRACION_MS = 400L
+        const val ANTES_DE_SONAR_MS = 150L
     }
 
     private fun crear(pcm: ShortArray, alarma: Boolean): AudioTrack {

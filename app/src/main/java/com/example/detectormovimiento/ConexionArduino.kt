@@ -15,6 +15,10 @@ import androidx.core.content.ContextCompat
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.util.SerialInputOutputManager
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.util.concurrent.Executors
+import kotlin.concurrent.thread
 
 /**
  * Conexión por cable USB con el Arduino Uno de la estación (original o clon con CH340).
@@ -24,6 +28,8 @@ import com.hoho.android.usbserial.util.SerialInputOutputManager
  * - Avisa cuando el cable se conecta o se desconecta (por ejemplo, al sacar la "cabeza").
  * - Si la comunicación falla pero el cable sigue puesto (un bajón de voltaje al mover el
  *   servo, por ejemplo), se reconecta sola cada pocos segundos.
+ * - Solo para pruebas: con [puertoPuente], también acepta el Arduino conectado a una
+ *   computadora (herramientas/puente.ps1 y "adb reverse"), sin cable OTG.
  *
  * Nota: el teléfono alimenta al Arduino por el cable. El servo debe tener su propia fuente
  * de 5 V (con la tierra unida al Arduino), o se reinicia todo al moverse.
@@ -35,6 +41,13 @@ class ConexionArduino(
 ) {
     var conectado = false
         private set
+
+    /** Puerto TCP del puente con la computadora (solo depuración); null = sin puente. */
+    var puertoPuente: Int? = null
+
+    // Puente: conexión abierta con la computadora (cuenta como conectada cuando llegan datos).
+    private var puente: Socket? = null
+    private val escritorPuente by lazy { Executors.newSingleThreadExecutor() }
 
     private val handler = Handler(Looper.getMainLooper())
     private val usb = contexto.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -71,11 +84,14 @@ class ConexionArduino(
             receptorRegistrado = true
         }
         conectar()
+        handler.removeCallbacks(buscarPuente)
+        if (puertoPuente != null) handler.post(buscarPuente)
     }
 
     fun detener() {
         iniciada = false
         handler.removeCallbacks(reconectar)
+        handler.removeCallbacks(buscarPuente)
         desconectar()
         if (receptorRegistrado) {
             try {
@@ -173,12 +189,27 @@ class ConexionArduino(
             // Ignorar
         }
         puerto = null
+        puente?.let { cerrar(it) }
+        puente = null
         pendiente.clear()
         if (estaba) alCambiarEstado(false)
     }
 
     fun enviar(comando: String) {
         Log.d(ETIQUETA_LOG, "-> ${comando.trim()}")
+        val s = puente
+        if (s != null && conectado) {
+            val bytes = comando.toByteArray(Charsets.US_ASCII)
+            // La red no se puede usar en el hilo principal. Si falla, se cierra y avisa el lector.
+            escritorPuente.execute {
+                try {
+                    s.getOutputStream().apply { write(bytes); flush() }
+                } catch (_: Exception) {
+                    cerrar(s)
+                }
+            }
+            return
+        }
         val p = puerto ?: return
         try {
             p.write(comando.toByteArray(Charsets.US_ASCII), 200)
@@ -210,6 +241,68 @@ class ConexionArduino(
         }
     }
 
+    // ---------- Puente con la computadora (solo pruebas) ----------
+
+    /** Cada pocos segundos, si no hay Arduino, intenta llegar al puente de la computadora. */
+    private val buscarPuente = object : Runnable {
+        override fun run() {
+            val puertoTcp = puertoPuente ?: return
+            if (!iniciada) return
+            if (!conectado && puente == null) abrirPuente(puertoTcp)
+            handler.postDelayed(this, ESPERA_PUENTE_MS)
+        }
+    }
+
+    private fun abrirPuente(puertoTcp: Int) {
+        val s = Socket()
+        puente = s
+        thread(isDaemon = true, name = "EhriaPuente") {
+            try {
+                s.connect(InetSocketAddress("127.0.0.1", puertoTcp), 1_000)
+                // El Arduino envía datos 4 veces por segundo: 5 s sin nada es que se cortó.
+                s.soTimeout = 5_000
+                val entrada = s.getInputStream()
+                val buffer = ByteArray(256)
+                while (true) {
+                    val n = entrada.read(buffer)
+                    if (n < 0) break
+                    val datos = buffer.copyOf(n)
+                    handler.post { alRecibirDelPuente(s, datos) }
+                }
+            } catch (_: Exception) {
+                // No hay puente, se cerró o dejaron de llegar datos
+            }
+            cerrar(s)
+            handler.post { alCerrarPuente(s) }
+        }
+    }
+
+    private fun alRecibirDelPuente(s: Socket, datos: ByteArray) {
+        if (puente !== s) return
+        if (!conectado) {
+            // Con "adb reverse" la conexión se acepta aunque en la computadora no haya nadie:
+            // recién cuando llegan datos del Arduino cuenta como conectada.
+            conectado = true
+            alCambiarEstado(true)
+            handler.postDelayed({ enviar(ProtocoloArduino.COMANDO_SALUDO) }, 2_500L)
+        }
+        recibirBytes(datos)
+    }
+
+    private fun alCerrarPuente(s: Socket) {
+        if (puente !== s) return
+        puente = null
+        if (conectado) desconectar()
+    }
+
+    private fun cerrar(s: Socket) {
+        try {
+            s.close()
+        } catch (_: Exception) {
+            // Ignorar
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun dispositivoDe(intent: Intent): UsbDevice? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -218,6 +311,7 @@ class ConexionArduino(
 
     companion object {
         private const val ESPERA_RECONEXION_MS = 2_000L
+        private const val ESPERA_PUENTE_MS = 3_000L
         private const val ACCION_PERMISO = "com.example.detectormovimiento.PERMISO_USB"
         private const val ETIQUETA_LOG = "EhriaArduino"
     }

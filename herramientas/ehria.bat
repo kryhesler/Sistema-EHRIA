@@ -7,8 +7,9 @@ setlocal
 set "APP=com.example.detectormovimiento"
 set "ACCION=com.example.detectormovimiento.SIMULAR_ARDUINO"
 set "AQUI=%~dp0"
-set "URL_APK=https://raw.githubusercontent.com/kryhesler/Sistema-EHRIA/asistente-voz-punto-encuentro/herramientas/ehria-debug.apk"
+set "URL_APK=https://raw.githubusercontent.com/kryhesler/Sistema-EHRIA/main/herramientas/ehria-debug.apk"
 set "URL_ADB=https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+set "URL_PUENTE=https://raw.githubusercontent.com/kryhesler/Sistema-EHRIA/main/herramientas/puente.ps1"
 
 if "%~1"=="" goto ayuda
 
@@ -36,6 +37,7 @@ if /i "%~1"=="instalar"    goto instalar
 if /i "%~1"=="reinstalar"  goto reinstalar
 if /i "%~1"=="abrir"       goto abrir
 if /i "%~1"=="telefono"    ("%ADB%" devices & goto fin)
+if /i "%~1"=="puente"      goto puente
 if /i "%~1"=="conectar"    (%ENVIAR% --ez conectado true & goto fin)
 if /i "%~1"=="desconectar" (%ENVIAR% --ez conectado false & goto fin)
 if /i "%~1"=="cerca"       (%ENVIAR% --es ambiente 27.5,65,80 & goto fin)
@@ -63,10 +65,19 @@ call :descargar "%URL_APK%" "%AQUI%ehria-debug.apk" || (echo No se pudo descarga
 "%ADB%" shell am start -n %APP%/.MainActivity
 goto fin
 
+:puente
+rem El Arduino va conectado a esta computadora; el telefono, por USB con depuracion activada.
+rem El telefono llega a la computadora por el mismo cable gracias a "adb reverse".
+if not exist "%AQUI%puente.ps1" call :descargar "%URL_PUENTE%" "%AQUI%puente.ps1"
+"%ADB%" reverse tcp:8777 tcp:8777 >nul || (echo No encuentro el telefono. Conectalo con la depuracion USB activada y acepta el aviso. & goto fin)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%AQUI%puente.ps1" %2
+goto fin
+
 :ayuda
 echo.
 echo  ehria.bat instalar            instala la app de prueba (ehria-debug.apk en esta carpeta, o la descarga) y la abre
 echo  ehria.bat telefono            muestra si el telefono esta conectado
+echo  ehria.bat puente [COM3]       estacion real: Arduino conectado a esta PC y telefono por USB
 echo  ehria.bat conectar            cara del robot, como si estuviera en la estacion
 echo  ehria.bat cerca               alguien frente a la estacion: despierta, saluda y escucha
 echo  ehria.bat lejos               nadie cerca (se duerme a los 45 s)
