@@ -972,19 +972,6 @@
                         android:textSize="13sp"
                         android:textColor="#FBBF24"
                         android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/tvEstPresencia"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:text="Sin datos de presencia"
-                        android:textSize="14sp"
-                        android:textColor="@color/texto_secundario"
-                        android:drawableStart="@drawable/ic_persona"
-                        android:drawablePadding="10dp"
-                        android:drawableTint="@color/texto_tenue"
-                        android:gravity="center_vertical" />
                 </LinearLayout>
 
                 <!-- Botiquín -->
@@ -1101,7 +1088,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
-                                android:text="Escucha cuando alguien se acerca a la estación."
+                                android:text="Escucha siempre que la cara del robot está en pantalla."
                                 android:textSize="12sp"
                                 android:textColor="@color/texto_tenue" />
                         </LinearLayout>

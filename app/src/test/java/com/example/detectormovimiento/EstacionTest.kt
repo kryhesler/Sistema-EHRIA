@@ -15,18 +15,23 @@ class EstacionTest {
 
     @Test
     fun protocolo_lecturaCompleta() {
-        val m = ProtocoloArduino.interpretar("S,25.3,61.0,85.5") as Mensaje.Datos
+        val m = ProtocoloArduino.interpretar("S,25.3,61.0") as Mensaje.Datos
         assertEquals(25.3f, m.lectura.temperaturaC!!, 0.01f)
         assertEquals(61.0f, m.lectura.humedad!!, 0.01f)
-        assertEquals(85.5f, m.lectura.distanciaCm!!, 0.01f)
+    }
+
+    @Test
+    fun protocolo_programaAnteriorConDistancia() {
+        // El programa anterior también mandaba la distancia del ultrasónico: se ignora.
+        val m = ProtocoloArduino.interpretar("S,25.3,61.0,85.5") as Mensaje.Datos
+        assertEquals(ProtocoloArduino.Lectura(25.3f, 61.0f), m.lectura)
     }
 
     @Test
     fun protocolo_sensoresSinDato() {
-        val m = ProtocoloArduino.interpretar("S,nan,nan,-1\r") as Mensaje.Datos
+        val m = ProtocoloArduino.interpretar("S,nan,nan\r") as Mensaje.Datos
         assertNull(m.lectura.temperaturaC)
         assertNull(m.lectura.humedad)
-        assertNull(m.lectura.distanciaCm)
     }
 
     @Test
@@ -43,34 +48,6 @@ class EstacionTest {
     fun protocolo_comandos() {
         assertEquals("P1\n", ProtocoloArduino.comandoPuerta(true))
         assertEquals("L0\n", ProtocoloArduino.comandoLuzInterior(false))
-        assertEquals("ER\n", ProtocoloArduino.comandoLedExterior(ProtocoloArduino.ModoLed.ALERTA))
-    }
-
-    // ---------- Presencia (ultrasónico) ----------
-
-    @Test
-    fun presencia_llegaYSeVa() {
-        val d = DetectorPresencia()
-        assertNull(d.procesar(300f, 0))
-        assertNull(d.procesar(90f, 250))
-        assertNull(d.procesar(85f, 500))
-        assertEquals(DetectorPresencia.Evento.LLEGO, d.procesar(80f, 750))
-        // Se mueve un poco (dentro del margen) y luego se va.
-        assertNull(d.procesar(140f, 5_000))
-        assertNull(d.procesar(null, 20_000))
-        assertEquals(DetectorPresencia.Evento.SE_FUE, d.procesar(null, 25_100))
-        assertFalse(d.presente)
-    }
-
-    @Test
-    fun presencia_unaLecturaSueltaNoDespierta() {
-        val d = DetectorPresencia()
-        var t = 0L
-        for (dist in listOf(300f, 60f, 300f, 300f, 70f, 300f)) {
-            assertNull(d.procesar(dist, t))
-            t += 250
-        }
-        assertFalse(d.presente)
     }
 
     // ---------- Asistente ----------

@@ -40,9 +40,7 @@ if /i "%~1"=="telefono"    ("%ADB%" devices & goto fin)
 if /i "%~1"=="puente"      goto puente
 if /i "%~1"=="conectar"    (%ENVIAR% --ez conectado true & goto fin)
 if /i "%~1"=="desconectar" (%ENVIAR% --ez conectado false & goto fin)
-if /i "%~1"=="cerca"       (%ENVIAR% --es ambiente 27.5,65,80 & goto fin)
-if /i "%~1"=="lejos"       (%ENVIAR% --es ambiente 27.5,65,-1 & goto fin)
-if /i "%~1"=="calor"       (%ENVIAR% --es ambiente 34,75,80 & goto fin)
+if /i "%~1"=="calor"       (%ENVIAR% --es ambiente 34,75 & goto fin)
 if /i "%~1"=="ambiente"    (%ENVIAR% --es ambiente %~2 & goto fin)
 if /i "%~1"=="decir"       ("%ADB%" shell "am broadcast -a %ACCION% -p %APP% --es decir '%~2'" & goto fin)
 if /i "%~1"=="expresion"   (%ENVIAR% --es expresion %~2 & goto fin)
@@ -79,10 +77,8 @@ echo  ehria.bat instalar            instala la app de prueba (ehria-debug.apk en
 echo  ehria.bat telefono            muestra si el telefono esta conectado
 echo  ehria.bat puente [COM3]       estacion real: Arduino conectado a esta PC y telefono por USB
 echo  ehria.bat conectar            cara del robot, como si estuviera en la estacion
-echo  ehria.bat cerca               alguien frente a la estacion: despierta, saluda y escucha
-echo  ehria.bat lejos               nadie cerca (se duerme a los 45 s)
-echo  ehria.bat calor               34 grados y 75%% de humedad, con alguien cerca
-echo  ehria.bat ambiente "25,60,-1" temperatura, humedad, distancia en cm (-1 = nadie; "no" = detener)
+echo  ehria.bat calor               34 grados y 75%% de humedad
+echo  ehria.bat ambiente "25,60"    temperatura y humedad ("no" = dejar de enviar)
 echo  ehria.bat decir "ehria abre el botiquin"    como si se lo dijeran al microfono
 echo  ehria.bat expresion todas     recorre todas las expresiones (o FELIZ, TRISTE, CORAZON...)
 echo  ehria.bat sismo fuerte        sismo simulado: leve, moderado o fuerte

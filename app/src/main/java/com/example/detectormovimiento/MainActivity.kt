@@ -168,7 +168,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // movimientos no son sismos. La detección se reanuda pasado este momento.
     private var reanudarSismosEnMs = 0L
 
-    // Estación: Arduino (DHT, ultrasónico, servo, LED) y modo robot
+    // Estación: Arduino (DHT, servo y luz del botiquín) y modo robot
     private enum class ModoRobot { NINGUNO, ESTACION, HERRAMIENTA }
 
     private var modoRobot = ModoRobot.NINGUNO
@@ -176,8 +176,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var receptorSimulador: BroadcastReceiver? = null
     private var ultimaLectura: ProtocoloArduino.Lectura? = null
     private var puertaAbierta = false
-    private var ultimoModoLed: ProtocoloArduino.ModoLed? = null
-    private val presencia = DetectorPresencia()
     private var robotDespierto = false
     private var ultimoSaludoMs = 0L
     // El parlante hace vibrar el teléfono: mientras suena (sirena, voz, efectos, metrónomo)
@@ -230,7 +228,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var tvEstHum: TextView
     private lateinit var tvEstCalor: TextView
     private lateinit var tvEstCalorConsejo: TextView
-    private lateinit var tvEstPresencia: TextView
     private lateinit var circuloBotiquin: View
     private lateinit var ivBotiquin: ImageView
     private lateinit var tvBotiquinEstado: TextView
@@ -617,7 +614,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (::tvRobotEstado.isInitialized) {
             tvRobotEstado.text = texto
             tvRobotEstado.compoundDrawableTintList = ColorStateList.valueOf(c)
-            actualizarLedExterior()
         }
     }
 
@@ -997,7 +993,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvEstHum = findViewById(R.id.tvEstHum)
         tvEstCalor = findViewById(R.id.tvEstCalor)
         tvEstCalorConsejo = findViewById(R.id.tvEstCalorConsejo)
-        tvEstPresencia = findViewById(R.id.tvEstPresencia)
         circuloBotiquin = findViewById(R.id.circuloBotiquin)
         ivBotiquin = findViewById(R.id.ivBotiquin)
         tvBotiquinEstado = findViewById(R.id.tvBotiquinEstado)
@@ -1047,8 +1042,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun alCambiarConexion(conectado: Boolean) {
         actualizarTarjetaEstacion()
         if (conectado) {
-            ultimoModoLed = null
-            actualizarLedExterior()
             arduino.enviar(ProtocoloArduino.comandoLuzInterior(puertaAbierta))
             // El Uno se reinicia al abrir el puerto (y cierra la puerta): cuando ya arrancó,
             // se le repite cómo debe estar todo.
@@ -1060,7 +1053,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (modoRobot != ModoRobot.ESTACION) entrarModoEstacion()
         } else {
             ultimaLectura = null
-            presencia.reiniciar()
             actualizarPanelEstacion()
             // Se desconectó el cable: sacaron la cabeza. Se espera un momento por si fue solo
             // un falso contacto al acomodar el teléfono en la carcasa.
@@ -1073,8 +1065,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private val reenviarEstadoArduino = Runnable {
         if (arduino.conectado) {
-            ultimoModoLed = null
-            actualizarLedExterior()
             arduino.enviar(ProtocoloArduino.comandoLuzInterior(puertaAbierta))
             if (puertaAbierta) arduino.enviar(ProtocoloArduino.comandoPuerta(true))
         }
@@ -1098,18 +1088,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 ultimaLectura = ProtocoloArduino.Lectura(
                     nueva.temperaturaC ?: previa?.temperaturaC,
                     nueva.humedad ?: previa?.humedad,
-                    nueva.distanciaCm,
                 )
                 actualizarDatosEstacion()
-                if (modoRobot == ModoRobot.ESTACION) {
-                    val distancia = nueva.distanciaCm
-                    if (distancia != null && distancia < 160f) programarSueno()
-                    when (presencia.procesar(distancia, SystemClock.elapsedRealtime())) {
-                        DetectorPresencia.Evento.LLEGO -> despertar(saludar = true)
-                        DetectorPresencia.Evento.SE_FUE -> dormir()
-                        null -> Unit
-                    }
-                }
             }
             is ProtocoloArduino.Mensaje.Hola -> {
                 actualizarTarjetaEstacion()
@@ -1147,21 +1127,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         actualizarPanelEstacion()
     }
 
-    /** El LED de afuera repite el estado de la detección para verlo desde lejos. */
-    private fun actualizarLedExterior() {
-        if (!::arduino.isInitialized || !arduino.conectado) return
-        val modo = when {
-            sismosEnPausa -> ProtocoloArduino.ModoLed.PAUSA
-            ultimaFase == Fase.ALERTA -> ProtocoloArduino.ModoLed.ALERTA
-            ultimaFase == Fase.EVALUANDO -> ProtocoloArduino.ModoLed.AVISO
-            ultimaFase == Fase.CALIBRANDO -> ProtocoloArduino.ModoLed.PAUSA
-            else -> ProtocoloArduino.ModoLed.NORMAL
-        }
-        if (modo == ultimoModoLed) return
-        ultimoModoLed = modo
-        arduino.enviar(ProtocoloArduino.comandoLedExterior(modo))
-    }
-
     private fun actualizarTarjetaEstacion() {
         if (!::arduino.isInitialized) return
         val conectada = arduino.conectado
@@ -1176,7 +1141,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         circuloEstacion.backgroundTintList = ColorStateList.valueOf(conAlfa(color, 0x26))
         if (conectada) {
             tvEstacionTitulo.text = "La estación está lista"
-            tvEstacionDetalle.text = "Saluda a quien se acerca, mide el ambiente y abre el botiquín ante un sismo."
+            tvEstacionDetalle.text = "Responde cuando le dicen «Ehria», mide el ambiente y abre el botiquín ante un sismo."
         } else {
             tvEstacionTitulo.text = "Coloca el teléfono en la estación"
             tvEstacionDetalle.text = "Conéctalo a la base con el cable USB. La cara del robot se activa sola."
@@ -1211,12 +1176,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             tvEstCalor.text = "--"
             tvEstCalor.setTextColor(Color.parseColor("#F8FAFC"))
             tvEstCalorConsejo.visibility = View.GONE
-        }
-        val distancia = l?.distanciaCm
-        tvEstPresencia.text = when {
-            !arduino.conectado -> "Sin datos de presencia"
-            distancia != null && distancia < 160f -> "Hay alguien a ${distancia.roundToInt()} cm"
-            else -> "Nadie cerca de la estación"
         }
         actualizarPanelEstacion()
     }
@@ -1270,7 +1229,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mostrarCapaRobot(true)
         mostrarHerramientaRobot(false)
         ocultarSismografoRobot()
-        presencia.reiniciar()
         actualizarPausaSismos(graciaMs = PAUSA_SISMOS_TRAS_PESTANA_MS)
         actualizarPanelEstacion()
         dormir()
@@ -1433,7 +1391,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun dormir() {
-        if (modoRobot != ModoRobot.ESTACION || ultimaFase == Fase.ALERTA || presencia.presente) return
+        if (modoRobot != ModoRobot.ESTACION || ultimaFase == Fase.ALERTA) return
         if (sismografoRobot.visibility == View.VISIBLE || asistenteOcupado() || evacuando()) return
         robotDespierto = false
         caraRobot.expresion = CaraRobotView.Expresion.DORMIDO
@@ -1593,7 +1551,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         caraRobot.expresion = CaraRobotView.Expresion.ALERTA
         if (arduino.conectado && !puertaAbierta) abrirBotiquin(true)
-        actualizarLedExterior()
         actualizarPanelEstacion()
     }
 
@@ -1723,13 +1680,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     /**
-     * El robot escucha solo en la estación, despierto (alguien se acercó o tocaron la cara) y
-     * callado: mientras habla no escucha, para no oírse a sí mismo. Durante la sirena tampoco.
+     * El robot escucha en la estación, también dormido (su nombre lo despierta), siempre que
+     * esté callado: mientras habla no escucha, para no oírse a sí mismo. Durante la sirena tampoco.
      */
     private fun actualizarEscucha() {
         if (!::escucha.isInitialized) return
         val escuchar = asistenteVozActivo && permisoMicrofono() && enPrimerPlano &&
-            modoRobot == ModoRobot.ESTACION && robotDespierto && vozActualId == null &&
+            modoRobot == ModoRobot.ESTACION && vozActualId == null &&
             !alarmaSonando && !medicionActiva
         if (escuchar) escucha.iniciar() else escucha.detener()
         actualizarEstadoVoz()
@@ -1748,7 +1705,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             estado == EscuchaVoz.Estado.SIN_CONEXION ->
                 "Sin internet: descarga el español para la voz sin conexión (Ajustes de Google › Voz)."
             estado == EscuchaVoz.Estado.ESCUCHANDO -> "Escuchando: di «Ehria» y lo que necesitas."
-            else -> "Escucha cuando el robot está despierto: alguien se acerca o tocas su cara."
+            else -> "Escucha siempre que la cara del robot está en pantalla."
         }
         val escuchando = asistenteVozActivo && estado == EscuchaVoz.Estado.ESCUCHANDO
         btnRobotMicrofono.visibility = if (asistenteVozActivo) View.VISIBLE else View.GONE
@@ -1756,10 +1713,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         actualizarPanelEstacion()
     }
 
-    /** Mientras alguien habla: si ya dijo "Ehria", la cara muestra que está escuchando. */
+    /** Mientras alguien habla: si ya dijo "Ehria", despierta y muestra que está escuchando. */
     private fun alOirParcial(texto: String) {
         if (modoRobot != ModoRobot.ESTACION || metronomoActivo) return
         if (caraRobot.expresion != Expresion.ESCUCHANDO && ComandosVoz.escuchar(texto).llamado) {
+            if (!robotDespierto) despertar(saludar = false)
             caraRobot.expresion = Expresion.ESCUCHANDO
             programarSueno()
         }
@@ -1777,6 +1735,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             comando = escuchas.firstNotNullOfOrNull { ComandosVoz.interpretar(it.resto) }
                 ?.takeIf { sinNombre || it in CONTROLES_GUIA }
         }
+        // Su nombre lo despierta aunque esté dormido.
+        if ((llamadas.isNotEmpty() || comando != null) && !robotDespierto) despertar(saludar = false)
         when {
             comando != null -> {
                 esperandoOrdenHastaMs = 0L
@@ -2539,8 +2499,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onReceive(context: Context, intent: Intent) {
                 intent.getStringExtra("linea")?.let { arduino.simularLinea(it) }
                 if (intent.hasExtra("conectado")) arduino.simularConexion(intent.getBooleanExtra("conectado", false))
-                // "27,65,80": temperatura, humedad y distancia (-1 = nadie) 4 veces por segundo,
-                // como el Arduino. "no" deja de enviar.
+                // "27,65": temperatura y humedad una vez por segundo, como el Arduino.
+                // "no" deja de enviar.
                 intent.getStringExtra("ambiente")?.let { simularAmbiente(it) }
                 // Una frase como si la hubieran dicho al micrófono: "ehria abre el botiquin".
                 intent.getStringExtra("decir")?.let { frase ->
@@ -2571,7 +2531,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         override fun run() {
             val linea = lineaAmbienteSimulada ?: return
             arduino.simularLinea(linea)
-            handler.postDelayed(this, 250L)
+            handler.postDelayed(this, 1_000L)
         }
     }
 

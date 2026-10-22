@@ -259,7 +259,7 @@ class ConexionArduino(
         thread(isDaemon = true, name = "EhriaPuente") {
             try {
                 s.connect(InetSocketAddress("127.0.0.1", puertoTcp), 1_000)
-                // El Arduino envía datos 4 veces por segundo: 5 s sin nada es que se cortó.
+                // El Arduino envía datos una vez por segundo: 5 s sin nada es que se cortó.
                 s.soTimeout = 5_000
                 val entrada = s.getInputStream()
                 val buffer = ByteArray(256)

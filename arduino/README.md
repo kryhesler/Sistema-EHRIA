@@ -6,10 +6,9 @@ El teléfono es la cabeza del robot y el Arduino Uno es el cuerpo. Se conectan c
 
 - Arduino Uno (original o clon con CH340)
 - Sensor DHT11 o DHT22 (temperatura y humedad)
-- Sensor ultrasónico HC-SR04
 - Servo (por ejemplo SG90 o MG90S) para la puerta del botiquín
-- 2 módulos de 4 LED direccionables (NeoPixel / WS2812): uno afuera (indicador de colores) y uno adentro (iluminación del botiquín)
-- 2 resistencias de 330 Ω (línea de datos de los LED) y un condensador de 1000 µF
+- 1 módulo de 4 LED direccionables (NeoPixel / WS2812) para iluminar el botiquín por dentro
+- 1 resistencia de 330 Ω (línea de datos de los LED) y un condensador de 1000 µF
 - Fuente de 5 V (2 A) para el servo y los LED
 - Cable USB OTG (USB-C o micro-USB, según el teléfono, a USB-B del Uno)
 
@@ -18,21 +17,18 @@ El teléfono es la cabeza del robot y el Arduino Uno es el cuerpo. Se conectan c
 | Componente   | Pin del sensor | Arduino |
 |--------------|----------------|---------|
 | DHT          | DATA           | D2 (con resistencia de 10 kΩ a 5 V si el módulo no la trae) |
-| HC-SR04      | TRIG / ECHO    | D9 / D10 |
 | Servo        | señal          | D3 |
-| LED exterior (4 NeoPixel) | DIN | D5 → 330 Ω → DIN; 5V y GND a la fuente externa |
 | LED interior (4 NeoPixel) | DIN | D6 → 330 Ω → DIN; 5V y GND a la fuente externa |
 
-Todos los GND van juntos: Arduino, sensores, servo, LED y fuente externa. El condensador de 1000 µF va entre 5V y GND de la fuente, cerca de los LED. Cada módulo usa su propio pin, así no hace falta encadenarlos. Si el módulo tiene la entrada marcada como "IN" o "DI", es la misma que DIN.
+Todos los GND van juntos: Arduino, sensor, servo, LED y fuente externa. El condensador de 1000 µF va entre 5V y GND de la fuente, cerca de los LED. Si el módulo tiene la entrada marcada como "IN" o "DI", es la misma que DIN.
 
 ## Cargar el programa
 
-1. Abrir `ehria_estacion/ehria_estacion.ino` en el Arduino IDE.
+1. Abrir `ehria_estacion/ehria_estacion.ino` en el Arduino IDE. Si el Arduino tiene el programa anterior (con ultrasónico y LED exterior), conviene cargar este: la app funciona con los dos, pero este ya no usa esas piezas.
 2. Instalar las librerías "DHT sensor library" (Adafruit), "Adafruit Unified Sensor" y "Adafruit NeoPixel".
 3. Si el sensor es blanco (DHT22), cambiar `TIPO_DHT` a `DHT22`.
 4. Ajustar `ANGULO_CERRADO` y `ANGULO_ABIERTO` según cómo quede montado el servo.
-   Si los colores salen cambiados (rojo en vez de verde), cambiar `NEO_GRB` por `NEO_RGB`.
-   El brillo se ajusta con `BRILLO_EXTERIOR` y `BRILLO_INTERIOR`.
+   Si la luz sale con un tono raro, cambiar `NEO_GRB` por `NEO_RGB`. El brillo se ajusta con `BRILLO_INTERIOR`.
 5. Elegir la placa "Arduino Uno" y cargar.
 
 ## Alimentación (importante)
@@ -43,15 +39,10 @@ Todos los GND van juntos: Arduino, sensores, servo, LED y fuente externa. El con
 
 ## Qué hace la app con el Arduino
 
-- **Temperatura y humedad:** el robot las dice al saludar. También calcula la sensación térmica.
-- **Ultrasónico:** si alguien se acerca a menos de 1.2 m, el robot despierta y saluda. Si nadie se acerca en 45 s, se vuelve a dormir.
-- **Sismo:** el servo abre la puerta del botiquín, la luz interior se enciende de forma suave y el LED exterior se pone en rojo como baliza.
-- **LED exterior (colores):**
-  - verde que "respira" despacio: vigilando;
-  - ámbar tenue fijo: detección en pausa;
-  - amarillo pulsando rápido: verificando un movimiento;
-  - rojo intenso, mitades alternadas: sismo.
-- **LED interior:** luz blanca cálida mientras la puerta del botiquín está abierta.
+- **Temperatura y humedad:** el robot las dice al saludar o cuando se las preguntan. También calcula la sensación térmica.
+- **Despertar y dormir:** el robot duerme con la pantalla tenue y despierta al oír "Ehria" o al tocar su cara. Tras 45 s sin que nadie le hable, se vuelve a dormir.
+- **Sismo:** el servo abre la puerta del botiquín y la luz interior se enciende de forma suave.
+- **Luz interior:** blanca cálida mientras la puerta del botiquín está abierta.
 - **Sacar el teléfono de la estación:** al quitar el cable (por más de 3 s), la app pasa al modo primeros auxilios para medir respiración y pulso. Al volver a conectarlo, regresa al modo estación. Mientras la estación está conectada, el medidor no se puede abrir: acomodar el teléfono en la carcasa nunca lo activa. Si solo se corta la comunicación con el cable puesto (por ejemplo, un bajón de voltaje al mover el servo), la app se reconecta sola y no cambia de modo.
 - **Asistente de voz:** con la cara del robot despierta, responde a su nombre. Ejemplos: "Ehria, abre el botiquín", "Ehria, ¿cómo hago RCP?" (guía paso a paso y luego un metrónomo a 110 por minuto), "Ehria, ¿cómo pongo un torniquete?", "Ehria, llama a una ambulancia" (llamada **simulada**: lo dice en voz alta), "Ehria, ¿dónde está el punto de encuentro?", "Ehria, ¿qué temperatura hace?", "Ehria, preséntate", "Ehria, ¿qué tiene el botiquín?". También se puede tocar el micrófono o la cara y hablar sin decir el nombre. Usa el reconocimiento de voz del teléfono: sin internet, solo funciona si está descargado el español sin conexión. Se enciende o apaga en la pestaña Estación.
 - **Punto de encuentro:** se configura en la pestaña Estación (lugar, dirección, distancia, cómo llegar y, si se quiere, una foto del croquis). Durante la alarma y los 3 minutos de evacuación, la pantalla muestra el mapa cada tanto. La cara queda preocupada 20 s después del sismo y vuelve sola a la normalidad.
@@ -66,7 +57,7 @@ En Windows, descargar el proyecto ([ZIP del proyecto](https://github.com/kryhesl
 ```
 ehria.bat instalar                      descarga, instala y abre la app en el teléfono
 ehria.bat conectar                      cara del robot, como si estuviera en la estación
-ehria.bat cerca                         alguien se acerca: despierta, saluda y escucha
+ehria.bat calor                         34 grados y 75 % de humedad
 ehria.bat decir "ehria abre el botiquin"
 ehria.bat expresion todas               recorre todas las expresiones
 ehria.bat sismo fuerte                  sismo simulado (leve, moderado o fuerte)
@@ -75,7 +66,7 @@ ehria.bat desconectar                   modo primeros auxilios
 
 ### La estación completa: Arduino conectado a la computadora
 
-Para probar con el Arduino de verdad (sensores, servo y LED) sin cable OTG: el Arduino va conectado a la computadora y el teléfono también, por USB con la depuración activada. La computadora hace de puente por el mismo cable del teléfono:
+Para probar con el Arduino de verdad (sensor, servo y luz) sin cable OTG: el Arduino va conectado a la computadora y el teléfono también, por USB con la depuración activada. La computadora hace de puente por el mismo cable del teléfono:
 
 ```
 ehria.bat puente          usa el último puerto COM (o indícalo: ehria.bat puente COM4)
@@ -89,7 +80,7 @@ En Mac o Linux, las mismas órdenes con `adb`:
 
 ```
 adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --ez conectado true
-adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es ambiente 27.5,65,80
+adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es ambiente 27.5,65
 adb shell "am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es decir 'ehria como hago rcp'"
 adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es expresion todas
 adb shell am broadcast -a com.example.detectormovimiento.SIMULAR_ARDUINO -p com.example.detectormovimiento --es sismo fuerte
