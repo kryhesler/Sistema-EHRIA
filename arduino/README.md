@@ -54,25 +54,36 @@ Todos los GND van juntos: Arduino, sensores, servo, LED y fuente externa. El con
 - **LED interior:** luz blanca cálida mientras la puerta del botiquín está abierta.
 - **Sacar el teléfono de la estación:** al quitar el cable (por más de 3 s), la app pasa al modo primeros auxilios para medir respiración y pulso. Al volver a conectarlo, regresa al modo estación. Mientras la estación está conectada, el medidor no se puede abrir: acomodar el teléfono en la carcasa nunca lo activa. Si solo se corta la comunicación con el cable puesto (por ejemplo, un bajón de voltaje al mover el servo), la app se reconecta sola y no cambia de modo.
 - **Asistente de voz:** con la cara del robot despierta, responde a su nombre. Ejemplos: "Ehria, abre el botiquín", "Ehria, ¿cómo hago RCP?" (guía paso a paso y luego un metrónomo a 110 por minuto), "Ehria, ¿cómo pongo un torniquete?", "Ehria, llama a una ambulancia" (llamada **simulada**: lo dice en voz alta), "Ehria, ¿dónde está el punto de encuentro?", "Ehria, ¿qué temperatura hace?", "Ehria, preséntate", "Ehria, ¿qué tiene el botiquín?". También se puede tocar el micrófono o la cara y hablar sin decir el nombre. Usa el reconocimiento de voz del teléfono: sin internet, solo funciona si está descargado el español sin conexión. Se enciende o apaga en la pestaña Estación.
-- **Punto de encuentro:** se configura en la pestaña Estación (lugar, dirección, distancia, cómo llegar y, si se quiere, una foto del croquis). Durante la alarma y los 3 minutos de evacuación, la pantalla muestra el mapa cada tanto; al terminar, la cara vuelve sola a la normalidad.
+- **Punto de encuentro:** se configura en la pestaña Estación (lugar, dirección, distancia, cómo llegar y, si se quiere, una foto del croquis). Durante la alarma y los 3 minutos de evacuación, la pantalla muestra el mapa cada tanto. La cara queda preocupada 20 s después del sismo y vuelve sola a la normalidad.
+- **Sirena y voz:** la vibración del propio parlante no cuenta como sismo: mientras suena, el teléfono no mide. La sirena hace una pausa de 1.6 s cada 4 s para poder seguir midiendo y saber cuándo terminó el sismo.
 
 ## Probar sin Arduino ni cable OTG (solo para desarrollo)
 
-Sirve un emulador de Android Studio o un teléfono conectado a la computadora con un cable USB normal y la **depuración USB** activada (Ajustes > Opciones de desarrollador).
+No hace falta Android Studio: basta un teléfono Android conectado a la computadora con un cable USB normal y la **depuración USB** activada (Ajustes > Acerca del teléfono > tocar 7 veces "Número de compilación"; luego Ajustes > Opciones de desarrollador > Depuración USB).
 
-En Windows, desde la carpeta del proyecto, `herramientas\ehria.bat` hace todo con `adb` (sin argumentos muestra la ayuda):
+En Windows, descargar el proyecto ([ZIP del proyecto](https://github.com/kryhesler/Sistema-EHRIA/archive/refs/heads/main.zip)), descomprimirlo y ejecutar `herramientas\ehria.bat` desde una ventana de comandos en esa carpeta. La app de prueba ya compilada está en `herramientas\ehria-debug.apk`. La primera vez descarga `adb` de Google y la app de prueba (sin argumentos muestra la ayuda):
 
 ```
-herramientas\ehria.bat instalar                      compila, instala y abre la app
-herramientas\ehria.bat conectar                      cara del robot, como si estuviera en la estación
-herramientas\ehria.bat cerca                         alguien se acerca: despierta, saluda y escucha
-herramientas\ehria.bat decir "ehria abre el botiquin"
-herramientas\ehria.bat expresion todas               recorre todas las expresiones
-herramientas\ehria.bat sismo fuerte                  sismo simulado (leve, moderado o fuerte)
-herramientas\ehria.bat desconectar                   modo primeros auxilios
+ehria.bat instalar                      descarga, instala y abre la app en el teléfono
+ehria.bat conectar                      cara del robot, como si estuviera en la estación
+ehria.bat cerca                         alguien se acerca: despierta, saluda y escucha
+ehria.bat decir "ehria abre el botiquin"
+ehria.bat expresion todas               recorre todas las expresiones
+ehria.bat sismo fuerte                  sismo simulado (leve, moderado o fuerte)
+ehria.bat desconectar                   modo primeros auxilios
 ```
 
-Las frases van sin tildes ni signos. En el emulador, para hablarle de verdad hay que activar *Extended controls > Microphone > Virtual microphone uses host audio input* y usar una imagen con Google Play.
+### La estación completa: Arduino conectado a la computadora
+
+Para probar con el Arduino de verdad (sensores, servo y LED) sin cable OTG: el Arduino va conectado a la computadora y el teléfono también, por USB con la depuración activada. La computadora hace de puente por el mismo cable del teléfono:
+
+```
+ehria.bat puente          usa el último puerto COM (o indícalo: ehria.bat puente COM4)
+```
+
+El teléfono se conecta solo en unos segundos y aparece la cara del robot, igual que en la estación. Cerrar la ventana del puente (o Ctrl+C) es como sacar el teléfono de la estación: pasa al modo primeros auxilios. Hay que cerrar el Monitor Serie del Arduino IDE, porque ocupa el puerto. Funciona solo con la app de prueba (`ehria-debug.apk`).
+
+Las frases van sin tildes ni signos. Con el teléfono también se le puede hablar de verdad al micrófono. Si `instalar` dice `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, la app del teléfono se instaló desde otra computadora: `ehria.bat reinstalar` la borra (con su historial) y la instala de nuevo.
 
 En Mac o Linux, las mismas órdenes con `adb`:
 

@@ -56,6 +56,13 @@ object SintetizadorSonidos {
         }
     }
 
+    /**
+     * Sirena para repetir en bucle: [ciclos] subidas y bajadas y luego [pausaMs] de silencio.
+     * En la pausa el teléfono queda quieto y se puede seguir midiendo si el suelo se mueve.
+     */
+    fun sirenaConPausa(cicloMs: Int, ciclos: Int, pausaMs: Int): ShortArray =
+        unir(*Array(ciclos) { sirena(cicloMs) }, silencio(pausaMs))
+
     /** Un latido "lub-dub": dos golpes graves que se apagan rápido. */
     fun latido(volumen: Double = 0.85): ShortArray = unir(
         golpe(140.0, 130, volumen),

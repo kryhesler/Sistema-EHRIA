@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Lo que descarga herramientas/ehria.bat
+/herramientas/platform-tools/

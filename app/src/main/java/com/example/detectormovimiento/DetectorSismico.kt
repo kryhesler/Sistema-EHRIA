@@ -22,6 +22,8 @@ class DetectorSismico(
     private val duracionVerificacionMs: Long = 10_000L,
     private val toleranciaPausaMs: Long = 1_500L,
     private val retencionAlertaMs: Long = 8_000L,
+    /** Además, para terminar la alerta hay que haber medido al menos esto sin movimiento. */
+    private val quietudMedidaMs: Long = 2_000L,
     private val constanteRuidoMs: Float = 30_000f,
 ) {
     enum class Fase { CALIBRANDO, NORMAL, EVALUANDO, ALERTA }
@@ -55,6 +57,8 @@ class DetectorSismico(
     private var ultimoSobreUmbralMs = 0L
     private var pgaPico = 0f
     private var pgaPicoBruto = 0f
+    /** Tiempo de alerta medido (no omitido) bajo el umbral desde el último movimiento. */
+    private var quietoMedidoMs = 0L
 
     private var ruidoBase = 0f
     private var sumaCalibracion = 0.0
@@ -107,12 +111,14 @@ class DetectorSismico(
                     fase = Fase.ALERTA
                     nivel = clasificar(pgaPico)
                     alertaNueva = true
+                    quietoMedidoMs = 0L
                 }
             }
 
             Fase.ALERTA -> {
                 if (pgaFiltrado >= umbral) {
                     ultimoSobreUmbralMs = ahoraMs
+                    quietoMedidoMs = 0L
                     pgaPico = max(pgaPico, pgaFiltrado)
                     pgaPicoBruto = max(pgaPicoBruto, magnitud)
                     val nuevoNivel = clasificar(pgaPico)
@@ -120,8 +126,12 @@ class DetectorSismico(
                         nivel = nuevoNivel
                         alertaNueva = true
                     }
+                } else {
+                    quietoMedidoMs += dtMs
                 }
-                if (ahoraMs - ultimoSobreUmbralMs > retencionAlertaMs) {
+                // Termina tras [retencionAlertaMs] sin movimiento, siempre que se haya podido
+                // medir (con la sirena sonando solo se mide en sus pausas).
+                if (ahoraMs - ultimoSobreUmbralMs > retencionAlertaMs && quietoMedidoMs >= quietudMedidaMs) {
                     reiniciarEvento()
                 }
             }
@@ -132,6 +142,21 @@ class DetectorSismico(
         val duracionMovimiento = if (enEvento) ((ultimoSobreUmbralMs - inicioEventoMs) / 1000L).toInt() else 0
 
         return Estado(fase, nivel, pgaFiltrado, pgaPico, pgaPicoBruto, umbral, segundos, duracionMovimiento, alertaNueva)
+    }
+
+    /**
+     * Momento sin medición válida: el parlante del propio teléfono está sonando (sirena, voz)
+     * y su vibración no es un sismo. Ese tiempo no sirve para confirmar un sismo, y durante
+     * una alerta no cuenta como tiempo medido sin movimiento.
+     */
+    fun omitir(ahoraMs: Long) {
+        if (ultimoMs >= 0 && fase == Fase.EVALUANDO) {
+            val dtMs = (ahoraMs - ultimoMs).coerceAtLeast(0L)
+            inicioEventoMs += dtMs
+            ultimoSobreUmbralMs += dtMs
+        }
+        if (inicioMs < 0) inicioMs = ahoraMs
+        ultimoMs = ahoraMs
     }
 
     /** Botón "restablecer": vuelve a vigilancia normal sin perder la calibración. */

@@ -1,1 +1,2 @@
-*.bat text eol=crlf
+# Los .bat se guardan tal cual, con saltos de linea de Windows (cmd los necesita).
+*.bat -text

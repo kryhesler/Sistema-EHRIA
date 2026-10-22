@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo en la app de prueba: el puente con el Arduino conectado a la computadora
+     (herramientas/puente.ps1 y "adb reverse"). La app normal no usa la red. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
