@@ -20,8 +20,14 @@ if exist "%ADB%" goto adbListo
 set "ADB=%AQUI%platform-tools\adb.exe"
 if exist "%ADB%" goto adbListo
 echo Descargando adb de Google (unos 7 MB)...
-curl -L -f -o "%AQUI%platform-tools.zip" "%URL_ADB%" || (echo No se pudo descargar adb. Revisa la conexion a internet. & goto fin)
-tar -xf "%AQUI%platform-tools.zip" -C "%AQUI%" || (echo No se pudo descomprimir adb. & goto fin)
+if exist "%AQUI%platform-tools.zip" del "%AQUI%platform-tools.zip"
+call :descargar "%URL_ADB%" "%AQUI%platform-tools.zip" || (echo No se pudo descargar adb. Revisa la conexion a internet. & goto fin)
+rem Se descomprime desde la misma carpeta (una ruta que termina en \ antes de la comilla
+rem confunde a tar). Si tar no esta o falla, se usa PowerShell.
+pushd "%AQUI%"
+"%SystemRoot%\System32\tar.exe" -xf platform-tools.zip 2>nul || powershell -NoProfile -Command "Expand-Archive -Force -Path 'platform-tools.zip' -DestinationPath '.'"
+popd
+if not exist "%ADB%" (echo No se pudo descomprimir adb. Descomprime a mano platform-tools.zip en esta carpeta y vuelve a intentar. & goto fin)
 del "%AQUI%platform-tools.zip"
 :adbListo
 set "ENVIAR="%ADB%" shell am broadcast -a %ACCION% -p %APP%"
@@ -50,7 +56,7 @@ echo Conecta el telefono con la depuracion USB activada y acepta el aviso que ap
 rem Si ehria-debug.apk ya esta en esta carpeta, se usa esa; si no, se descarga.
 if exist "%AQUI%ehria-debug.apk" goto apkLista
 echo Descargando la app de prueba...
-curl -L -f -o "%AQUI%ehria-debug.apk" "%URL_APK%" || (echo No se pudo descargar la app. Copia ehria-debug.apk en esta carpeta y vuelve a intentar. & goto fin)
+call :descargar "%URL_APK%" "%AQUI%ehria-debug.apk" || (echo No se pudo descargar la app. Copia ehria-debug.apk en esta carpeta y vuelve a intentar. & goto fin)
 :apkLista
 "%ADB%" install -r "%AQUI%ehria-debug.apk" || (echo. & echo Si dice INSTALL_FAILED_UPDATE_INCOMPATIBLE, la app del telefono se instalo desde otra computadora. Usa: ehria.bat reinstalar ^(borra el historial de la app^) & goto fin)
 :abrir
@@ -72,5 +78,13 @@ echo  ehria.bat sismo fuerte        sismo simulado: leve, moderado o fuerte
 echo  ehria.bat desconectar         modo primeros auxilios
 echo.
 echo  Escribe las frases sin tildes ni signos: "ehria como hago rcp", "ehria que temperatura hace".
+goto fin
+
+rem Descarga %1 en %2: con curl (Windows 10 y 11) o, si no esta, con PowerShell.
+:descargar
+"%SystemRoot%\System32\curl.exe" -L -f -s -S -o "%~2" "%~1" 2>nul && exit /b 0
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol='Tls12'; Invoke-WebRequest -UseBasicParsing -Uri '%~1' -OutFile '%~2'" && exit /b 0
+exit /b 1
+
 :fin
 endlocal
