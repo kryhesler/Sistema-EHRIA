@@ -71,7 +71,20 @@ object SintetizadorSonidos {
         return unir(*Array(cantidad) { unir(uno, silencio(espera)) })
     }
 
+    /**
+     * Un golpe de metrónomo y su silencio hasta el siguiente, a [bpm] por minuto. Pensado para
+     * repetirse en bucle: marca el ritmo de las compresiones de la RCP.
+     */
+    fun metronomo(bpm: Int): ShortArray {
+        val periodoMs = 60_000 / bpm.coerceIn(30, 220)
+        val golpe = unir(tono(1_250.0, 35, 0.9), tono(900.0, 25, 0.6))
+        return unir(golpe, silencio(periodoMs - duracionMs(golpe).toInt()))
+    }
+
     fun tic() = tono(1_000.0, 60, 0.5)
+    /** Tono de llamada (425 Hz, como en la red telefónica): dos timbres. */
+    fun tonoLlamada() = unir(tono(425.0, 1_000, 0.5), silencio(2_000), tono(425.0, 1_000, 0.5), silencio(500))
+    fun escuchando() = unir(tono(784.0, 70, 0.45), tono(1_175.0, 90, 0.45))
     fun inicio() = tono(880.0, 260, 0.6)
     fun exito() = unir(tono(660.0, 110), silencio(25), tono(880.0, 200))
     fun error() = unir(tono(494.0, 150), silencio(25), tono(370.0, 280))

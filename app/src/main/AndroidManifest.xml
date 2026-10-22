@@ -9,6 +9,16 @@
     <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
     <!-- Para conectarse al Arduino por USB; la app también funciona sin él. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <!-- Asistente de voz de la estación ("Ehria, abre el botiquín"). Se pide al usarlo. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Android 11+: para encontrar el reconocimiento de voz del teléfono. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:name=".EhriaApp"
