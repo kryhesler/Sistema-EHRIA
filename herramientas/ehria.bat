@@ -47,8 +47,11 @@ rem Borra la app (y su historial) para poder instalar una firmada en otra comput
 :instalar
 echo Conecta el telefono con la depuracion USB activada y acepta el aviso que aparece en su pantalla.
 "%ADB%" wait-for-device
+rem Si ehria-debug.apk ya esta en esta carpeta, se usa esa; si no, se descarga.
+if exist "%AQUI%ehria-debug.apk" goto apkLista
 echo Descargando la app de prueba...
-curl -L -f -o "%AQUI%ehria-debug.apk" "%URL_APK%" || (echo No se pudo descargar la app. & goto fin)
+curl -L -f -o "%AQUI%ehria-debug.apk" "%URL_APK%" || (echo No se pudo descargar la app. Copia ehria-debug.apk en esta carpeta y vuelve a intentar. & goto fin)
+:apkLista
 "%ADB%" install -r "%AQUI%ehria-debug.apk" || (echo. & echo Si dice INSTALL_FAILED_UPDATE_INCOMPATIBLE, la app del telefono se instalo desde otra computadora. Usa: ehria.bat reinstalar ^(borra el historial de la app^) & goto fin)
 :abrir
 "%ADB%" shell am start -n %APP%/.MainActivity
@@ -56,7 +59,7 @@ goto fin
 
 :ayuda
 echo.
-echo  ehria.bat instalar            descarga e instala la app de prueba en el telefono y la abre
+echo  ehria.bat instalar            instala la app de prueba (ehria-debug.apk en esta carpeta, o la descarga) y la abre
 echo  ehria.bat telefono            muestra si el telefono esta conectado
 echo  ehria.bat conectar            cara del robot, como si estuviera en la estacion
 echo  ehria.bat cerca               alguien frente a la estacion: despierta, saluda y escucha
