@@ -60,7 +60,7 @@ Todos los GND van juntos: Arduino, sensores, servo, LED y fuente externa. El con
 
 No hace falta Android Studio: basta un teléfono Android conectado a la computadora con un cable USB normal y la **depuración USB** activada (Ajustes > Acerca del teléfono > tocar 7 veces "Número de compilación"; luego Ajustes > Opciones de desarrollador > Depuración USB).
 
-En Windows, descargar `ehria.bat` de la [versión de prueba](https://github.com/kryhesler/Sistema-EHRIA/releases/tag/prueba-asistente-voz) (o usar `herramientas\ehria.bat`) y ejecutarlo desde una ventana de comandos en su carpeta. La primera vez descarga `adb` de Google y la app de prueba (sin argumentos muestra la ayuda):
+En Windows, descargar el proyecto ([ZIP de la rama](https://github.com/kryhesler/Sistema-EHRIA/archive/refs/heads/asistente-voz-punto-encuentro.zip)), descomprimirlo y ejecutar `herramientas\ehria.bat` desde una ventana de comandos en esa carpeta. La app de prueba ya compilada está en `herramientas\ehria-debug.apk`. La primera vez descarga `adb` de Google y la app de prueba (sin argumentos muestra la ayuda):
 
 ```
 ehria.bat instalar                      descarga, instala y abre la app en el teléfono

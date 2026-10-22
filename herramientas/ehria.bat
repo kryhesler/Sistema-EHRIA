@@ -7,7 +7,7 @@ setlocal
 set "APP=com.example.detectormovimiento"
 set "ACCION=com.example.detectormovimiento.SIMULAR_ARDUINO"
 set "AQUI=%~dp0"
-set "URL_APK=https://github.com/kryhesler/Sistema-EHRIA/releases/download/prueba-asistente-voz/ehria-debug.apk"
+set "URL_APK=https://raw.githubusercontent.com/kryhesler/Sistema-EHRIA/asistente-voz-punto-encuentro/herramientas/ehria-debug.apk"
 set "URL_ADB=https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
 
 if "%~1"=="" goto ayuda
